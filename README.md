@@ -1,2 +1,2 @@
 # Cora-Core
-The new improve core of cora using IWA.
+The new improved core of cora using IWA.
