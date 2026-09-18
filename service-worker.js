@@ -14,6 +14,12 @@
  *      window.crossOriginIsolated true — required for WebContainer.boot().
  *      coi-serviceworker.js (loaded first, in index.html's <head>) is
  *      just the bootstrap that registers this worker and reloads once.
+ *
+ * The headers must be stamped on the *cached* shell too, not just on
+ * network responses. A cache hit that answers the navigation without
+ * COOP/COEP leaves the document non-isolated, which makes the bootstrap
+ * reload on every single load — an endless reload loop that also
+ * discards any pending File Handling API launch (double-clicked .hpk).
  * -----------------------------------------------------------------------
  */
 
@@ -40,9 +46,7 @@ self.addEventListener("fetch", (event) => {
     event.request.mode === "navigate" || url.pathname.endsWith("/index.html");
 
   if (isShellRequest) {
-    event.respondWith(
-      caches.match(SHELL_URL).then((cached) => cached || withCoiHeaders(event.request))
-    );
+    event.respondWith(shellResponse(event.request));
     return;
   }
 
@@ -52,10 +56,36 @@ self.addEventListener("fetch", (event) => {
   // Cross-origin requests (WebContainer's own preview origin, etc.) pass through untouched.
 });
 
-/** Re-issues a same-origin response with COOP/COEP headers stamped on. */
+/**
+ * Network-first for the shell so the cached copy can be refreshed, with
+ * the cache as the offline fallback. Either way the response handed to
+ * the page carries the isolation headers.
+ */
+async function shellResponse(request) {
+  try {
+    const network = await fetch(request);
+    if (network.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(SHELL_URL, network.clone());
+    }
+    return stampCoiHeaders(network);
+  } catch (err) {
+    const cached = await caches.match(SHELL_URL);
+    if (cached) return stampCoiHeaders(cached);
+    throw err;
+  }
+}
+
+/** Fetches a same-origin request and re-issues it with COOP/COEP stamped on. */
 async function withCoiHeaders(request) {
-  const response = await fetch(request);
-  if (response.status === 0) return response; // opaque response — nothing we can add headers to
+  return stampCoiHeaders(await fetch(request));
+}
+
+/** Re-issues an existing response with COOP/COEP stamped on. */
+function stampCoiHeaders(response) {
+  // Opaque responses have no readable headers or body to copy.
+  if (response.type === "opaque" || response.status === 0) return response;
+
   const headers = new Headers(response.headers);
   headers.set("Cross-Origin-Embedder-Policy", "require-corp");
   headers.set("Cross-Origin-Opener-Policy", "same-origin");

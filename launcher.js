@@ -13,19 +13,37 @@ import { launchOfflineApp } from "./webcontainer-runtime.js";
 /**
  * Mounts the launcher into `container` and returns a `refresh()` you can
  * call after installing a new app.
+ *
+ * `onInstallRequest` is invoked by the Install button. Double-clicking a
+ * .hpk only works once CAS is installed as a PWA and the browser
+ * supports the File Handling API, so the launcher always offers a way in
+ * that doesn't depend on either.
  */
-export async function mountLauncher(container) {
+export async function mountLauncher(container, { onInstallRequest } = {}) {
   container.innerHTML = `
     <div class="cas-launcher">
-      <input class="cas-search" type="search" placeholder="Search apps" aria-label="Search apps" />
+      <div class="cas-launcher__bar">
+        <input class="cas-search" type="search" placeholder="Search apps" aria-label="Search apps" />
+        <button class="cas-btn cas-btn--filled cas-install" type="button">Install package</button>
+      </div>
       <div class="cas-grid" role="list"></div>
-      <p class="cas-empty" hidden>No apps installed yet. Open a .hpk file to install one.</p>
+      <p class="cas-empty" hidden>
+        No apps installed yet. Choose <strong>Install package</strong> above, drop a
+        .hpk file onto this window, or double-click one on your desktop.
+      </p>
     </div>
   `;
 
   const searchInput = container.querySelector(".cas-search");
   const grid = container.querySelector(".cas-grid");
   const emptyState = container.querySelector(".cas-empty");
+  const installButton = container.querySelector(".cas-install");
+
+  if (onInstallRequest) {
+    installButton.addEventListener("click", () => onInstallRequest());
+  } else {
+    installButton.hidden = true;
+  }
 
   let apps = [];
 

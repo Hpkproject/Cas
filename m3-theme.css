@@ -254,3 +254,64 @@
   font: var(--md-sys-type-body-medium);
   margin-top: 64px;
 }
+
+/* -------------------------------------------------------------------- */
+/* Launcher bar, storage gate and the resume-install banner             */
+/* -------------------------------------------------------------------- */
+
+.cas-launcher__bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 auto 32px;
+  max-width: 960px;
+}
+
+.cas-launcher__bar .cas-search {
+  margin: 0;
+  flex: 1 1 320px;
+}
+
+.cas-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.cas-gate__note {
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--md-sys-type-body-medium);
+  margin: 0;
+}
+
+.cas-banner {
+  position: fixed;
+  inset-block-end: 24px;
+  inset-inline: 0;
+  width: max-content;
+  max-width: calc(100% - 48px);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 12px 12px 20px;
+  border-radius: var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+  z-index: 10;
+}
+
+.cas-banner__text {
+  font: var(--md-sys-type-body-medium);
+}
+
+body.cas-dropping .cas-launcher {
+  outline: 2px dashed var(--md-sys-color-primary);
+  outline-offset: -12px;
+}

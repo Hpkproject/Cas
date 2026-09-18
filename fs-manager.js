@@ -142,6 +142,16 @@ export class FsManager {
   }
 
   /**
+   * True if a casf handle was persisted by a previous session, whether or
+   * not it's still usable. Lets callers tell "never set up" (show the
+   * folder picker) apart from "set up, but the browser downgraded the
+   * permission" (re-request it from a click instead of picking again).
+   */
+  async hasStoredRoot() {
+    return (await idbGet(IDB_KEY)) !== null;
+  }
+
+  /**
    * First-run flow: ask the user to pick (or create) the casf root
    * directory, persist the handle, and scaffold the folder tree.
    */
