@@ -1,0 +1,32 @@
+{
+  "name": "Cora App Services",
+  "short_name": "CAS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#141218",
+  "theme_color": "#141218",
+  "icons": [
+    { "src": "./icons/CAS-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icons/CAS-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "file_handlers": [
+    {
+      "action": "./index.html",
+      "name": "HPK Application Package",
+      "icons": [{ "src": "./icons/Hpk-96.png", "sizes": "96x96", "type": "image/png" }],
+      "accept": {
+        "application/x-hpk": [".hpk"]
+      },
+      "launch_type": "single-client"
+    },
+    {
+      "action": "./index.html",
+      "name": "CAS Plugin Package",
+      "icons": [{ "src": "./icons/CAS-96.png", "sizes": "96x96", "type": "image/png" }],
+      "accept": {
+        "application/x-casplugin": [".casplugin"]
+      },
+      "launch_type": "single-client"
+    }
+  ]
+}

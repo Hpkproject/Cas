@@ -1,0 +1,256 @@
+/**
+ * m3-theme.css
+ * -----------------------------------------------------------------------
+ * Material 3 tokens (color roles, shape, elevation, type scale) used by
+ * the installer dialog and the app launcher. Values follow the M3
+ * baseline spec at a dark-surface + violet-seed configuration; swap the
+ * --md-sys-color-* block to retheme without touching component CSS.
+ * -----------------------------------------------------------------------
+ */
+
+:root {
+  /* Color roles (M3 baseline dark scheme, seed #6750A4) */
+  --md-sys-color-primary: #d0bcff;
+  --md-sys-color-on-primary: #381e72;
+  --md-sys-color-primary-container: #4f378b;
+  --md-sys-color-on-primary-container: #eaddff;
+  --md-sys-color-surface: #141218;
+  --md-sys-color-surface-container: #211f26;
+  --md-sys-color-surface-container-high: #2b2930;
+  --md-sys-color-on-surface: #e6e0e9;
+  --md-sys-color-on-surface-variant: #cac4d0;
+  --md-sys-color-outline: #938f99;
+  --md-sys-color-outline-variant: #49454f;
+  --md-sys-color-scrim: rgba(0, 0, 0, 0.5);
+
+  /* Shape */
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+
+  /* Elevation (approximated as layered shadows) */
+  --md-sys-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-3: 0 4px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.15);
+
+  /* Type scale (subset) */
+  --md-sys-type-headline-small: 600 24px/32px "Roboto", system-ui, sans-serif;
+  --md-sys-type-title-medium: 500 16px/24px "Roboto", system-ui, sans-serif;
+  --md-sys-type-body-medium: 400 14px/20px "Roboto", system-ui, sans-serif;
+  --md-sys-type-label-large: 500 14px/20px "Roboto", system-ui, sans-serif;
+}
+
+/* -------------------------------------------------------------------- */
+/* Install dialog (M3 "Basic dialog" pattern)                           */
+/* -------------------------------------------------------------------- */
+
+.cas-dialog::backdrop {
+  background: var(--md-sys-color-scrim);
+}
+
+.cas-dialog {
+  border: none;
+  padding: 0;
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-3);
+  width: min(320px, 90vw);
+}
+
+.cas-dialog__body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.cas-dialog__icon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  object-fit: cover;
+  background: var(--md-sys-color-surface-container);
+}
+
+.cas-dialog__title {
+  font: var(--md-sys-type-headline-small);
+  margin: 0;
+}
+
+.cas-dialog__desc {
+  font: var(--md-sys-type-body-medium);
+  color: var(--md-sys-color-on-surface-variant);
+  margin: 0;
+}
+
+.cas-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cas-btn {
+  font: var(--md-sys-type-label-large);
+  border: none;
+  border-radius: 20px;
+  padding: 10px 24px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.cas-btn--text {
+  background: transparent;
+  color: var(--md-sys-color-primary);
+}
+
+.cas-btn--text:hover {
+  background: rgba(208, 188, 255, 0.08);
+}
+
+.cas-btn--filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+.cas-btn--filled:hover {
+  filter: brightness(1.06);
+}
+
+.cas-btn--filled:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cas-dialog:has(.cas-perm-list) {
+  width: min(380px, 90vw);
+}
+
+.cas-perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.cas-perm-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  cursor: pointer;
+}
+
+.cas-perm-row:hover {
+  background: var(--md-sys-color-surface-container);
+}
+
+.cas-perm-row input[type="checkbox"] {
+  margin-top: 3px;
+  accent-color: var(--md-sys-color-primary);
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.cas-perm-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cas-perm-row strong {
+  font: var(--md-sys-type-title-medium);
+}
+
+.cas-perm-row small {
+  font: var(--md-sys-type-body-medium);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* -------------------------------------------------------------------- */
+/* Launcher                                                              */
+/* -------------------------------------------------------------------- */
+
+.cas-launcher {
+  min-height: 100vh;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  padding: 32px;
+  box-sizing: border-box;
+}
+
+.cas-search {
+  display: block;
+  width: min(480px, 100%);
+  margin: 0 auto 32px;
+  padding: 12px 20px;
+  border-radius: 28px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  font: var(--md-sys-type-body-medium);
+}
+
+.cas-search:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.cas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.cas-app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+
+.cas-app:hover,
+.cas-app:focus-visible {
+  background: var(--md-sys-color-surface-container);
+  outline: none;
+}
+
+.cas-app__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--md-sys-shape-corner-large);
+  object-fit: cover;
+  background: var(--md-sys-color-surface-container);
+}
+
+.cas-app__name {
+  font: var(--md-sys-type-title-medium);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.cas-empty {
+  text-align: center;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--md-sys-type-body-medium);
+  margin-top: 64px;
+}
