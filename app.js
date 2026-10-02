@@ -19,6 +19,8 @@ import { installHpk } from "./hpk-installer.js";
 import { installCasPlugin } from "./plugin-installer.js";
 import { mountLauncher } from "./launcher.js";
 import { bootAll as bootBackgroundWorkers } from "./bw-manager.js";
+import { showRunOnLoginPrompt } from "./run-on-login.js";
+import { openSettingsApp } from "./settings-app.js";
 import {
   captureLaunches,
   onLaunch,
@@ -79,7 +81,10 @@ async function boot() {
     console.error("[CAS] background worker boot failed:", err)
   );
 
-  const { refresh } = await mountLauncher(root, { onInstallRequest: openInstallPicker });
+  const { refresh } = await mountLauncher(root, {
+    onInstallRequest: openInstallPicker,
+    onSettingsRequest: () => openSettingsApp(root, () => boot()),
+  });
   refreshLauncher = refresh;
   installerReady = true;
 
@@ -118,9 +123,14 @@ async function renderStorageGate(root) {
   button.addEventListener("click", async () => {
     button.disabled = true;
     try {
-      // Re-granting an existing handle and picking a new one are
-      // different calls; both need this click to be in progress.
-      if (hasStoredRoot ? await fs.restore() : Boolean(await fs.setupFirstRun())) {
+      if (!hasStoredRoot) {
+        const handle = await fs.setupFirstRun();
+        if (handle) {
+          await showRunOnLoginPrompt(); // only on a genuinely fresh setup, not a reconnect
+          await boot();
+          return;
+        }
+      } else if (await fs.restore()) {
         await boot(); // continue in this document — no reload, no lost launch
         return;
       }

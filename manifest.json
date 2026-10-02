@@ -2,6 +2,7 @@
   "name": "Cora App Services",
   "short_name": "CAS",
   "start_url": "./index.html",
+  "id": "./index.html",
   "display": "standalone",
   "background_color": "#141218",
   "theme_color": "#141218",

@@ -147,15 +147,27 @@ export async function launchOfflineApp(app) {
 
   const appWindow = window.open(serverUrl, `cas-app-${app.appId}`, "popup,width=1024,height=768");
   wireStorageSync(appWindow, app.appId);
-  attachBridge(appWindow, { appId: app.appId, appName: app.name, kind: "window" });
+  attachBridge(appWindow, {
+    appId: app.appId,
+    appName: app.name,
+    kind: "window",
+    origin: new URL(serverUrl).origin,
+  });
   return appWindow;
 }
 
 /**
  * Reads assets.zip for this app, and writes every entry into the
  * container's public/assets/ directory, preserving nested paths (e.g.
- * `random/appcode/scripts/mystuff/randomexample/usercode.js`).
+ * `random/appcode/scripts/mystuff/randomexample/usercode.js`) — but never
+ * outside it: entries are re-validated here even though they were
+ * already re-zipped by packageAssets (hpk-installer.js) with the same
+ * check, since assets.zip is a plain file on disk that anything with
+ * filesystem access could have swapped out after install.
  */
+const MAX_ASSET_ENTRIES = 20000;
+const MAX_ASSET_ENTRY_BYTES = 50 * 1024 * 1024;
+
 async function extractAssetsIntoContainer(container, appId) {
   let zipHandle;
   try {
@@ -170,12 +182,46 @@ async function extractAssetsIntoContainer(container, appId) {
   const zip = await JSZip.loadAsync(zipFile);
 
   const entries = Object.values(zip.files).filter((e) => !e.dir);
+  if (entries.length > MAX_ASSET_ENTRIES) {
+    throw new Error(`assets.zip for "${appId}" has too many entries (${entries.length}).`);
+  }
+
   for (const entry of entries) {
+    const safeRelative = sanitizeZipEntryName(entry.name);
+    if (safeRelative === null) {
+      console.warn(`[CAS] skipped unsafe asset path in "${appId}": ${entry.name}`);
+      continue;
+    }
     const contents = new Uint8Array(await entry.async("uint8array"));
-    const targetPath = `public/assets/${entry.name}`;
+    if (contents.byteLength > MAX_ASSET_ENTRY_BYTES) {
+      throw new Error(`Asset "${entry.name}" in "${appId}" exceeds the per-file size limit.`);
+    }
+    const targetPath = `public/assets/${safeRelative}`;
     await container.fs.mkdir(dirname(targetPath), { recursive: true });
     await container.fs.writeFile(targetPath, contents);
   }
+}
+
+/**
+ * Collapses a zip entry's path and rejects it outright if it tries to
+ * climb above the extraction root (the classic "zip slip" attack: an
+ * entry named e.g. "../../../etc/passwd" or "..\\..\\evil.js"). Returns
+ * null for anything unsafe rather than silently clamping it, since a
+ * clamped path could still land somewhere the packager didn't intend.
+ */
+function sanitizeZipEntryName(name) {
+  const out = [];
+  for (const raw of String(name).replace(/\\/g, "/").split("/")) {
+    const segment = raw.trim();
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      if (out.length === 0) return null;
+      out.pop();
+      continue;
+    }
+    out.push(segment);
+  }
+  return out.length ? out.join("/") : null;
 }
 
 let cachedJSZip = null;

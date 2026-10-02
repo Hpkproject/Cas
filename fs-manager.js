@@ -24,9 +24,14 @@ const REQUIRED_DIRS = [
 
 // Paths (root-relative, forward-slash joined) that CAS.fs.modify() — the
 // API exposed to guest apps — must never write to, no matter what
-// filesystem permission an app was granted. Apps may only touch files
-// outside CAS's own internal tree. Enforced centrally in perm-host.js.
-export const PROTECTED_PREFIXES = ["CAS/apis", "CAS/sys", "CAS/bws"];
+// filesystem permission an app was granted. This is deliberately the
+// entire "CAS" tree, not just the obviously-sensitive subfolders: an app
+// with filesystem permission that could still reach e.g.
+// CAS/apps/index.json could rewrite its own (or another app's) granted
+// permissions, which would make the whole permission system pointless.
+// Apps get everything else in casf — outside CAS/ entirely — to
+// themselves. Enforced centrally in cas-perms-bridge.js.
+export const PROTECTED_PREFIXES = ["CAS"];
 
 // Real download URLs for the runtime dependencies CAS vendors locally.
 // NOTE on coi-serviceworker.js: it only enables crossOriginIsolated when

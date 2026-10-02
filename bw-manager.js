@@ -14,6 +14,8 @@ import { PERMISSIONS, getGrantedPermissions } from "./permissions.js";
 import { attachBridge } from "./cas-perms-bridge.js";
 import { CAS_PERMS_CLIENT_SRC } from "./cas-perms-client.js";
 
+/** appId -> Worker, so bootAll() can be called repeatedly (e.g. leaving Settings) without piling up duplicate workers. */
+const appWorkers = new Map();
 /** pluginName -> { worker, pending: Map<callId, {resolve,reject}> } */
 const pluginWorkers = new Map();
 let nextInvokeId = 1;
@@ -54,13 +56,41 @@ export async function bootAll() {
   }
 }
 
-async function bootAppWorker(app) {
+/**
+ * Starts or stops one app's background worker to match its current
+ * registry state + granted permissions — used by settings-app.js right
+ * after the user toggles the "background_workers" permission, so a
+ * revoke actually stops the worker instead of only gating future
+ * CAS.fs.modify/CAS.notify calls from it.
+ */
+export async function syncAppWorkerState(appId) {
+  const apps = await loadAppRegistry();
+  const app = apps.find((e) => (e.appId ?? e.name) === appId);
+  if (!app?.backgroundWorker) return;
+
+  const granted = await getGrantedPermissions(appId);
+  if (granted.has(PERMISSIONS.BACKGROUND_WORKERS)) {
+    await bootAppWorker(app);
+  } else {
+    stopAppWorker(appId);
+  }
+}
+
+function stopAppWorker(appId) {
+  const worker = appWorkers.get(appId);
+  if (!worker) return;
+  worker.terminate();
+  appWorkers.delete(appId);
+}
   const appId = app.appId ?? app.name;
+  if (appWorkers.has(appId)) return; // already running
+
   const text = await fs.readText(["CAS", "bws", appId, "sw.js"]);
   if (!text) return;
 
   const worker = new Worker(sourceToBlobUrl(CAS_PERMS_CLIENT_SRC + "\n" + text), { type: "module" });
   attachBridge(worker, { appId, appName: app.name, kind: "worker" });
+  appWorkers.set(appId, worker);
 }
 
 async function bootPluginWorker(plugin) {

@@ -13,13 +13,18 @@
 
 import { fs } from "./fs-manager.js";
 
+/** Minimal HTML-escape for anything interpolated into a dialog's innerHTML that isn't from a fixed, trusted string — app/plugin names and descriptions come from a manifest a third party wrote, so this is the one thing standing between an .hpk author and script execution inside CAS's own privileged origin. */
+export function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+}
+
 export const PERMISSIONS = {
   NOTIF: "notif",
   FILESYSTEM: "filesystem",
   BACKGROUND_WORKERS: "background_workers",
 };
 
-const PERMISSION_COPY = {
+export const PERMISSION_COPY = {
   [PERMISSIONS.NOTIF]: {
     label: "Send notifications",
     desc: "Show notifications on your behalf via CAS.",
@@ -67,7 +72,7 @@ export function showPermissionDialog({ name, icon, requested }) {
     dialog.innerHTML = `
       <div class="cas-dialog__body">
         <img class="cas-dialog__icon" src="${icon}" alt="" />
-        <h2 class="cas-dialog__title">${name} wants permission to:</h2>
+        <h2 class="cas-dialog__title">${escapeHtml(name)} wants permission to:</h2>
         <div class="cas-perm-list">${rows}</div>
       </div>
       <div class="cas-dialog__actions">
@@ -109,8 +114,8 @@ export function showRuntimePermissionPrompt(appName, permission) {
     dialog.className = "cas-dialog";
     dialog.innerHTML = `
       <div class="cas-dialog__body">
-        <h2 class="cas-dialog__title">${appName}</h2>
-        <p class="cas-dialog__desc">wants to: <strong>${copy.label}</strong><br/>${copy.desc}</p>
+        <h2 class="cas-dialog__title">${escapeHtml(appName)}</h2>
+        <p class="cas-dialog__desc">wants to: <strong>${escapeHtml(copy.label)}</strong><br/>${escapeHtml(copy.desc)}</p>
       </div>
       <div class="cas-dialog__actions">
         <button class="cas-btn cas-btn--text" data-action="deny">Deny</button>
@@ -174,4 +179,38 @@ export async function grantPermission(appId, permission) {
   if (!entry) return;
   entry.permissions = [...new Set([...(entry.permissions ?? []), permission])];
   await fs.writeFile(path, JSON.stringify(registry, null, 2));
+}
+
+/** Settings-app counterpart to grantPermission: turns one permission off for one app/plugin. */
+export async function revokePermission(appId, permission) {
+  const path = registryPathFor(appId);
+  const raw = await fs.readText(path);
+  const registry = raw ? JSON.parse(raw) : [];
+  const entry = registry.find((e) => matchesId(e, appId));
+  if (!entry) return;
+  entry.permissions = (entry.permissions ?? []).filter((p) => p !== permission);
+  await fs.writeFile(path, JSON.stringify(registry, null, 2));
+}
+
+/** Every app (and, separately, every plugin) with its current permission grants — for the Settings app. */
+export async function listPermissionSubjects() {
+  const [appsRaw, pluginsRaw] = await Promise.all([
+    fs.readText(["CAS", "apps", "index.json"]),
+    fs.readText(["CAS", "apis", "plugins", "index.json"]),
+  ]);
+  const apps = (appsRaw ? JSON.parse(appsRaw) : [])
+    .filter((e) => e.type === "offline" || e.type === "online")
+    .map((e) => ({
+      appId: e.appId ?? e.name,
+      name: e.name,
+      kind: "app",
+      permissions: new Set(e.permissions ?? []),
+    }));
+  const plugins = (pluginsRaw ? JSON.parse(pluginsRaw) : []).map((e) => ({
+    appId: `plugin:${e.pluginId}`,
+    name: e.name,
+    kind: "plugin",
+    permissions: new Set(e.permissions ?? []),
+  }));
+  return [...apps, ...plugins];
 }

@@ -315,3 +315,46 @@ body.cas-dropping .cas-launcher {
   outline: 2px dashed var(--md-sys-color-primary);
   outline-offset: -12px;
 }
+
+/* -------------------------------------------------------------------- */
+/* Settings app                                                          */
+/* -------------------------------------------------------------------- */
+
+.cas-settings {
+  max-width: 720px;
+  margin: 0 auto;
+  align-items: stretch;
+}
+
+.cas-settings__title {
+  font: var(--md-sys-type-headline-small);
+  margin: 0;
+}
+
+.cas-settings__section {
+  margin-top: 32px;
+}
+
+.cas-settings__section h2 {
+  font: var(--md-sys-type-title-medium);
+  margin-bottom: 4px;
+}
+
+.cas-settings__app {
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-sys-shape-corner-medium);
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.cas-settings__app h3 {
+  font: var(--md-sys-type-title-medium);
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#cas-update-results {
+  margin-top: 12px;
+}
