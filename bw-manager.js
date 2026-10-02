@@ -82,6 +82,8 @@ function stopAppWorker(appId) {
   worker.terminate();
   appWorkers.delete(appId);
 }
+
+async function bootAppWorker(app) {
   const appId = app.appId ?? app.name;
   if (appWorkers.has(appId)) return; // already running
 
