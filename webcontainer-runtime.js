@@ -27,23 +27,33 @@ import { attachBridge } from "./cas-perms-bridge.js";
 let containerInstance = null;
 let containerBootPromise = null;
 
+// @webcontainer/api's published build is NOT a single self-contained file —
+// it has its own internal relative imports between sibling files (e.g.
+// "./internal/auth-state.js"). Those only resolve against a real,
+// hierarchical module URL. A blob: URL has no path structure for a
+// relative import to resolve against at all, which is exactly the
+// "Invalid relative url or base scheme isn't hierarchical" error:
+// fetching the text and dynamic-importing it from a Blob URL (what this
+// used to do) breaks the moment the bundle tries to pull in one of its
+// own internal files. Importing directly from a CDN that mirrors the
+// package's real file layout (jsdelivr does) sidesteps the problem
+// entirely — the browser resolves "./internal/auth-state.js" against
+// jsdelivr's own URL for this file, which is a normal, real request.
+//
+// This does mean booting a WebContainer needs network access to this
+// CDN, not just to StackBlitz's own servers — but WebContainer.boot()
+// already needs network access regardless (it downloads its Node.js/WASM
+// runtime from StackBlitz at boot time), so this isn't giving up offline
+// capability WebContainer-backed apps actually had.
+const WEBCONTAINER_CDN_URL = "https://cdn.jsdelivr.net/npm/@webcontainer/api@1.5.1/dist/index.js";
+
 /** Lazily boots (or reuses) the single shared WebContainer instance. */
 async function getContainer() {
   if (containerInstance) return containerInstance;
   if (containerBootPromise) return containerBootPromise;
 
   containerBootPromise = (async () => {
-    const text = await fs.readText(["CAS", "sys", "api", "3rd-party", "webcontainer.js"]);
-    if (!text) {
-      throw new Error("webcontainer.js is missing from 3rd-party/ — run FsManager.ensureDependencies() first.");
-    }
-    // Vendored as an ES module bundle; import it via a Blob URL so it
-    // executes with real `import`/`export` semantics instead of eval.
-    const blob = new Blob([text], { type: "text/javascript" });
-    const moduleUrl = URL.createObjectURL(blob);
-    const { WebContainer } = await import(/* webpackIgnore: true */ moduleUrl);
-    URL.revokeObjectURL(moduleUrl);
-
+    const { WebContainer } = await import(/* webpackIgnore: true */ WEBCONTAINER_CDN_URL);
     containerInstance = await WebContainer.boot({ workdirName: "cas-app" });
     return containerInstance;
   })();

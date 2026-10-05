@@ -18,6 +18,7 @@ import { fs } from "./fs-manager.js";
 import { installHpk } from "./hpk-installer.js";
 import { installCasPlugin } from "./plugin-installer.js";
 import { mountLauncher } from "./launcher.js";
+import { mountShell } from "./shell.js";
 import { bootAll as bootBackgroundWorkers } from "./bw-manager.js";
 import { showRunOnLoginPrompt } from "./run-on-login.js";
 import { openSettingsApp } from "./settings-app.js";
@@ -81,14 +82,26 @@ async function boot() {
     console.error("[CAS] background worker boot failed:", err)
   );
 
-  const { refresh } = await mountLauncher(root, {
-    onInstallRequest: openInstallPicker,
-    onSettingsRequest: () => openSettingsApp(root, () => boot()),
+  const shell = mountShell(root, {
+    onHome: () => boot(),
+    onInstall: openInstallPicker,
+    onSettings: () => openSettingsApp(shell.main, () => returnHome(shell)),
   });
+
+  await mountLauncherView(shell.main);
+  await drainPendingLaunches();
+}
+
+async function mountLauncherView(mainEl) {
+  const { refresh } = await mountLauncher(mainEl);
   refreshLauncher = refresh;
   installerReady = true;
+}
 
-  await drainPendingLaunches();
+/** Settings' "Back" / sidebar's Home: re-highlight Home and re-render the grid, without rebuilding the sidebar itself. */
+async function returnHome(shell) {
+  shell.setActive("home");
+  await mountLauncherView(shell.main);
 }
 
 /**
@@ -112,6 +125,7 @@ async function renderStorageGate(root) {
     : "";
 
   root.innerHTML = `
+    <div class="cas-space-bg" aria-hidden="true"></div>
     <div class="cas-launcher cas-gate">
       ${waiting}
       <button class="cas-btn cas-btn--filled" id="setup-btn" type="button"></button>

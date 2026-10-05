@@ -11,27 +11,20 @@ import { fs } from "./fs-manager.js";
 import { launchOfflineApp } from "./webcontainer-runtime.js";
 
 /**
- * Mounts the launcher into `container` and returns a `refresh()` you can
- * call after installing a new app.
- *
- * `onInstallRequest` is invoked by the Install button. Double-clicking a
- * .hpk only works once CAS is installed as a PWA and the browser
- * supports the File Handling API, so the launcher always offers a way in
- * that doesn't depend on either. `onSettingsRequest` opens the Settings
- * app (permission management, update checks) — a built-in view, not
- * something installed via .hpk.
+ * Mounts the launcher into `container` (the shell's main slot — see
+ * shell.js) and returns a `refresh()` you can call after installing or
+ * uninstalling an app. Install/Settings now live in the sidebar, not a
+ * bar owned by this view, so this only renders the search bar + grid.
  */
-export async function mountLauncher(container, { onInstallRequest, onSettingsRequest } = {}) {
+export async function mountLauncher(container) {
   container.innerHTML = `
     <div class="cas-launcher">
       <div class="cas-launcher__bar">
         <input class="cas-search" type="search" placeholder="Search apps" aria-label="Search apps" />
-        <button class="cas-btn cas-btn--filled cas-install" type="button">Install package</button>
-        <button class="cas-btn cas-btn--text cas-settings" type="button" aria-label="Settings">⚙ Settings</button>
       </div>
       <div class="cas-grid" role="list"></div>
       <p class="cas-empty" hidden>
-        No apps installed yet. Choose <strong>Install package</strong> above, drop a
+        No apps installed yet. Use <strong>﹢</strong> in the sidebar, drop a
         .hpk file onto this window, or double-click one on your desktop.
       </p>
     </div>
@@ -40,20 +33,6 @@ export async function mountLauncher(container, { onInstallRequest, onSettingsReq
   const searchInput = container.querySelector(".cas-search");
   const grid = container.querySelector(".cas-grid");
   const emptyState = container.querySelector(".cas-empty");
-  const installButton = container.querySelector(".cas-install");
-  const settingsButton = container.querySelector(".cas-settings");
-
-  if (onInstallRequest) {
-    installButton.addEventListener("click", () => onInstallRequest());
-  } else {
-    installButton.hidden = true;
-  }
-
-  if (onSettingsRequest) {
-    settingsButton.addEventListener("click", () => onSettingsRequest());
-  } else {
-    settingsButton.hidden = true;
-  }
 
   let apps = [];
 

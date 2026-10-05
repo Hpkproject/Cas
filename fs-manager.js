@@ -41,11 +41,15 @@ export const PROTECTED_PREFIXES = ["CAS"];
 // travels with the rest of CAS's dependencies, but the shell also ships
 // its own same-named file next to index.html, since that's the one the
 // browser can actually register early in <head>. See index.html.
+//
+// @webcontainer/api is deliberately NOT vendored here. Its published
+// build has internal relative imports between its own files (e.g.
+// "./internal/auth-state.js") that only resolve against a real,
+// hierarchical module URL — not a blob: URL reconstructed from fetched
+// text, which has no path structure for a relative import to resolve
+// against. webcontainer-runtime.js imports it directly from jsdelivr at
+// launch time instead, which mirrors the package's real file layout.
 const DEPENDENCIES = [
-  {
-    url: "https://unpkg.com/@webcontainer/api@1.5.1/dist/index.js",
-    path: ["CAS", "sys", "api", "3rd-party", "webcontainer.js"],
-  },
   {
     url: "https://unpkg.com/jszip@3.10.1/dist/jszip.min.js",
     path: ["CAS", "sys", "api", "3rd-party", "jszip.js"],
@@ -182,7 +186,7 @@ export class FsManager {
   }
 
   /**
-   * Downloads webcontainer.js / jszip.js into 3rd-party/ once, skipping
+   * Downloads jszip.js / coi-serviceworker.js into 3rd-party/ once, skipping
    * files that already exist locally.
    */
   async ensureDependencies(onProgress = () => {}) {
@@ -228,6 +232,25 @@ export class FsManager {
   /** Returns a directory handle relative to casf root, creating it if needed. */
   async getDir(segments) {
     return ensureDirPath(this.root, segments);
+  }
+
+  /**
+   * Deletes a file or directory (recursively, for a directory) relative
+   * to casf root — used for uninstalling an app/plugin. Missing entries
+   * are treated as already-deleted rather than an error, since
+   * uninstalling something partially written (e.g. a failed earlier
+   * install) should still succeed.
+   */
+  async removeEntry(segments, { recursive = false } = {}) {
+    try {
+      const dirSegments = segments.slice(0, -1);
+      const leaf = segments[segments.length - 1];
+      const dir = await walkExisting(this.root, dirSegments);
+      await dir.removeEntry(leaf, { recursive });
+    } catch (err) {
+      if (err.name === "NotFoundError") return;
+      throw err;
+    }
   }
 }
 

@@ -17,19 +17,20 @@ import {
 } from "./permissions.js";
 import { checkAllForUpdates, applyUpdate } from "./update-checker.js";
 import { syncAppWorkerState } from "./bw-manager.js";
+import { uninstallApp, uninstallPlugin } from "./uninstall.js";
 
-/** Replaces `root`'s content with the Settings screen. `onClose` re-renders whatever was there before. */
+/** Replaces `root`'s content with the Settings screen. `onClose` re-renders whatever was there before (the sidebar's Home button also gets you back). */
 export async function openSettingsApp(root, onClose) {
   root.innerHTML = `
-    <div class="cas-launcher cas-settings">
-      <div class="cas-launcher__bar">
-        <button class="cas-btn cas-btn--text cas-settings__back" type="button">← Back</button>
-        <h1 class="cas-settings__title">Settings</h1>
-      </div>
+    <div class="cas-settings">
+      <h1 class="cas-settings__title">
+        <button class="cas-btn cas-btn--text cas-settings__back" type="button">←</button>
+        Settings
+      </h1>
 
       <section class="cas-settings__section">
-        <h2>Permissions</h2>
-        <p class="cas-gate__note">What each installed app or plugin is allowed to do.</p>
+        <h2>Apps & Plugins</h2>
+        <p class="cas-gate__note">What each one is allowed to do, and uninstalling.</p>
         <div class="cas-perm-table" id="cas-perm-table"></div>
       </section>
 
@@ -73,8 +74,14 @@ async function renderPermissionTable() {
         })
         .join("");
       return `
-        <div class="cas-settings__app">
-          <h3>${escapeHtml(subject.name)} <small class="cas-gate__note">${subject.kind}</small></h3>
+        <div class="cas-settings__app" data-subject-card="${escapeHtml(subject.appId)}">
+          <div class="cas-settings__app-head">
+            <h3>${escapeHtml(subject.name)} <small class="cas-gate__note">${subject.kind}</small></h3>
+            <button class="cas-btn cas-btn--danger cas-uninstall-btn" type="button"
+                    data-subject="${escapeHtml(subject.appId)}" data-kind="${subject.kind}">
+              Uninstall
+            </button>
+          </div>
           ${rows}
         </div>`;
     })
@@ -95,6 +102,30 @@ async function renderPermissionTable() {
         input.checked = !input.checked; // revert the UI on failure
       } finally {
         input.disabled = false;
+      }
+    });
+  });
+
+  table.querySelectorAll(".cas-uninstall-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const { subject, kind } = button.dataset;
+      const card = table.querySelector(`[data-subject-card="${CSS.escape(subject)}"]`);
+      const name = card?.querySelector("h3")?.textContent ?? subject;
+      if (!confirm(`Uninstall ${name}? This deletes its files and can't be undone.`)) return;
+
+      button.disabled = true;
+      button.textContent = "Uninstalling…";
+      try {
+        if (kind === "plugin") {
+          await uninstallPlugin(subject.replace(/^plugin:/, ""));
+        } else {
+          await uninstallApp(subject);
+        }
+        await renderPermissionTable(); // the subject just disappears from the list
+      } catch (err) {
+        alert(`Couldn't uninstall "${name}": ${err.message}`);
+        button.disabled = false;
+        button.textContent = "Uninstall";
       }
     });
   });

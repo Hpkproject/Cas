@@ -76,11 +76,23 @@ export async function syncAppWorkerState(appId) {
   }
 }
 
-function stopAppWorker(appId) {
+/** Stops one app's background worker, if running. Exported for uninstall.js as well as syncAppWorkerState above. */
+export function stopAppWorker(appId) {
   const worker = appWorkers.get(appId);
   if (!worker) return;
   worker.terminate();
   appWorkers.delete(appId);
+}
+
+/** Stops one plugin's background worker, if running — used when uninstalling it. */
+export function stopPluginWorker(pluginId) {
+  const entry = pluginWorkers.get(pluginId);
+  if (!entry) return;
+  for (const pending of entry.pending.values()) {
+    pending.reject(new Error(`Plugin "${pluginId}" was uninstalled.`));
+  }
+  entry.worker.terminate();
+  pluginWorkers.delete(pluginId);
 }
 
 async function bootAppWorker(app) {

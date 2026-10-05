@@ -1,9 +1,10 @@
 # CAS — Cora App Services
 
 Modular reference implementation: `casf` setup, the `.hpk`/`.casplugin`
-install pipelines, a Material 3 launcher, a WebContainer-based offline-app
-runtime, cross-origin isolation, a per-app permission system with a Settings
-app to manage it, a signed update system, and background workers.
+install pipelines, a sidebar launcher over a dark starfield theme, a
+WebContainer-based offline-app runtime, cross-origin isolation, a per-app
+permission system with a Settings app to manage (and uninstall) apps and
+plugins, a signed update system, and background workers.
 
 ## File map
 
@@ -26,7 +27,9 @@ app to manage it, a signed update system, and background workers.
 | `coi-serviceworker.js` | Page-context bootstrap: registers `service-worker.js`, reloads at most once, and hands any pending File Handling API launch to `pending-launch.js` first |
 | `run-on-login.js` | One-time onboarding dialog guiding the user through Chromium's real "Run on OS Login" setting (unmanaged devices) |
 | `app.js` | Entry point: storage gate, launch draining, manual/drag-and-drop installs, boots background workers, mounts the launcher/Settings |
-| `m3-theme.css` | Material 3 tokens + dialog/launcher/permission-list/settings component styles |
+| `theme.css` | Dark, space-themed look: CSS-only starfield background, sidebar/dialog/launcher/settings styles. No Material 3 chrome — see "Look and feel" below |
+| `shell.js` | Persistent sidebar (brand, Home, Install, Settings) with a `<main>` content slot; `launcher.js`/`settings-app.js` render into it instead of owning the whole page |
+| `uninstall.js` | Stops a running worker, deletes every file an app/plugin's install wrote, drops its registry entry — wired into the Settings app |
 | `index.html`, `manifest.json` | Shell page (loads `coi-serviceworker.js` first) and PWA manifest (`file_handlers` for `.hpk`/`.casplugin`, stable `id`, `launch_handler: focus-existing`) |
 | `enterprise-policy/webapp-settings.sample.json` | Sample Chromium `WebAppSettings` policy for managed Cora OS devices — makes CAS start on login automatically, no per-user step |
 
@@ -125,12 +128,50 @@ app can never enable its own auto-start. Two real paths, both used here:
 ## Cross-origin isolation
 
 `coi-serviceworker.js` is vendored into `casf/CAS/sys/api/3rd-party/` like
-`webcontainer.js`/`jszip.js` for version-pinning, but the copy that's actually
-*registered* is the one shipped next to `index.html`. It reloads **at most
-once** per tab (a second failed attempt would loop forever) and, before that
-reload, hands any pending File Handling API launch to `pending-launch.js` —
-otherwise a double-clicked `.hpk` that triggers the very first load would
-have its launch params silently discarded by the isolation reload itself.
+`jszip.js` for version-pinning, but the copy that's actually *registered* is
+the one shipped next to `index.html`. It reloads **at most once** per tab (a
+second failed attempt would loop forever) and, before that reload, hands any
+pending File Handling API launch to `pending-launch.js` — otherwise a
+double-clicked `.hpk` that triggers the very first load would have its
+launch params silently discarded by the isolation reload itself.
+
+`@webcontainer/api` is deliberately **not** vendored into casf the way
+`jszip.js` is. Its published build has its own internal relative imports
+between sibling files (e.g. `./internal/auth-state.js`), and those only
+resolve against a real, hierarchical module URL — a `blob:` URL
+reconstructed from fetched text has no path structure for a relative import
+to resolve against, which is exactly the "Invalid relative url or base
+scheme isn't hierarchical" error an earlier version of this hit on launch.
+`webcontainer-runtime.js` imports it directly from jsdelivr at launch time
+instead, which mirrors the package's real file layout. This does mean
+booting a WebContainer needs network access to that CDN — but
+`WebContainer.boot()` already needs network access regardless (it downloads
+its own Node.js/WASM runtime from StackBlitz at boot time), so nothing
+offline-capable was given up.
+
+## Look and feel
+
+No more Material 3 dialog chrome — `theme.css` keeps the same violet/dark
+color roles but drops the M3 surface/elevation system for a plain dark
+background with a CSS-only starfield (layered `radial-gradient`s, no
+images) and a persistent left sidebar instead of a top bar per screen.
+`shell.js` mounts the sidebar once; `launcher.js` and `settings-app.js`
+render into its `<main>` slot rather than replacing the whole page, so
+switching between Home and Settings doesn't rebuild the sidebar each time.
+`html`/`body` now get an explicit `margin: 0` and dark `background` —
+their absence before was the actual cause of the white border around
+everything: the browser's default body margin was showing the page's
+default white background through the gap.
+
+## Uninstalling
+
+The Settings app lists an **Uninstall** button next to each app/plugin's
+permissions. It stops any running background worker first, then removes
+every directory that app/plugin's install wrote (`CAS/apps/[id]`,
+`CAS/apps/assets/[id]`, `CAS/apps/localstorage/[id]`, `CAS/bws/[id]` for an
+app; `CAS/apis/plugins/[id]`, `CAS/bws/plugins/[id]` for a plugin), and
+drops its registry entry last — so a failure partway through still leaves
+the app visible rather than silently orphaned on disk. See `uninstall.js`.
 
 ## Security
 
