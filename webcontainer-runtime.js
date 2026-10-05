@@ -47,16 +47,61 @@ let containerBootPromise = null;
 // capability WebContainer-backed apps actually had.
 const WEBCONTAINER_CDN_URL = "https://cdn.jsdelivr.net/npm/@webcontainer/api@1.5.1/dist/index.js";
 
+// WebContainer.boot() talks to a headless helper iframe StackBlitz serves
+// from w-corp-staticblitz.com, and that handshake depends on third-party
+// storage/cookies not being blocked for that origin — see
+// https://webcontainers.io/guides/troubleshooting ("WebContainers won't
+// run properly... if cookie blockers... are enabled"). When that's
+// blocked, boot() doesn't throw — it just never resolves, which looks
+// like "nothing happens" with no error at all. This timeout turns that
+// silent hang into an actual, actionable error instead.
+const BOOT_TIMEOUT_MS = 20000;
+
 /** Lazily boots (or reuses) the single shared WebContainer instance. */
 async function getContainer() {
   if (containerInstance) return containerInstance;
   if (containerBootPromise) return containerBootPromise;
 
   containerBootPromise = (async () => {
+    if (!window.crossOriginIsolated) {
+      throw new Error(
+        "window.crossOriginIsolated is false — WebContainer can't boot. " +
+          "coi-serviceworker.js should have reloaded the page once to fix this; " +
+          "try a hard reload (clearing the service worker if it still isn't true)."
+      );
+    }
+
     const { WebContainer } = await import(/* webpackIgnore: true */ WEBCONTAINER_CDN_URL);
-    containerInstance = await WebContainer.boot({ workdirName: "cas-app" });
+
+    const bootResult = await Promise.race([
+      WebContainer.boot({ workdirName: "cas-app" }),
+      new Promise((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                "WebContainer didn't boot within 20s. This almost always means " +
+                  "third-party cookies/storage are blocked for w-corp-staticblitz.com " +
+                  "(StackBlitz's own helper iframe) — check your browser's third-party " +
+                  "cookie setting or any content/cookie-blocking extension for this site."
+              )
+            ),
+          BOOT_TIMEOUT_MS
+        )
+      ),
+    ]);
+
+    containerInstance = bootResult;
+    containerInstance.on("error", (err) => {
+      console.error("[CAS] WebContainer runtime error:", err);
+    });
     return containerInstance;
-  })();
+  })().catch((err) => {
+    // A failed boot shouldn't be cached as "boot in progress" forever —
+    // clear the promise so the next launch attempt gets a fresh try.
+    containerBootPromise = null;
+    throw err;
+  });
 
   return containerBootPromise;
 }

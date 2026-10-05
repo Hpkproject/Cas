@@ -104,5 +104,10 @@ async function launchApp(app) {
     window.open(app.url, "_blank", "noopener,noreferrer");
     return;
   }
-  await launchOfflineApp(app);
+  try {
+    await launchOfflineApp(app);
+  } catch (err) {
+    console.error(`[CAS] launch of "${app.name}" failed:`, err);
+    alert(`Couldn't launch "${app.name}": ${err.message}`);
+  }
 }
