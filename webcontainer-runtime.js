@@ -132,7 +132,33 @@ const PACKAGE_JSON = JSON.stringify(
  * npm install -> start server -> open window -> wire storage sync.
  */
 export async function launchOfflineApp(app) {
+  // Open the window NOW, synchronously, while the click that started this
+  // launch still counts as a user gesture. Booting a container and running
+  // `npm install` takes far longer than a browser's user-activation window,
+  // so calling window.open() only once the server is ready (what this used
+  // to do) gets silently blocked by the popup blocker and returns null.
+  // We navigate this blank window to the server URL once it exists.
+  const appWindow = window.open("", `cas-app-${app.appId}`, "popup,width=1024,height=768");
+  if (!appWindow) {
+    throw new Error("The browser blocked the app window. Allow pop-ups for this site and try again.");
+  }
+  appWindow.document.title = app.name;
+  appWindow.document.body.textContent = `Starting ${app.name}…`;
+
+  try {
+    return await launchInto(appWindow, app);
+  } catch (err) {
+    appWindow.close();
+    throw err;
+  }
+}
+
+async function launchInto(appWindow, app) {
+  const stage = (msg) => console.info(`[CAS] launch(${app.appId}): ${msg}`);
+
+  stage("booting WebContainer");
   const container = await getContainer();
+  stage("booted; reading app files");
   const appDir = await fs.getDir(["CAS", "apps", app.appId]);
 
   const indexHtmlFile = await (await appDir.getFileHandle("index.html")).getFile();
@@ -179,15 +205,18 @@ export async function launchOfflineApp(app) {
     // No icon shipped — favicon tag will 404 silently, which is fine.
   }
 
+  stage("mounting files");
   await container.mount(fileTree);
   await extractAssetsIntoContainer(container, app.appId);
 
+  stage("npm install (can take a while on first launch)");
   const installProcess = await container.spawn("npm", ["install"]);
   const installExit = await installProcess.exit;
   if (installExit !== 0) {
     throw new Error(`npm install failed for app "${app.appId}" (exit ${installExit}).`);
   }
 
+  stage("starting server");
   const serverUrl = await new Promise(async (resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Server did not become ready in time.")), 15000);
     container.on("server-ready", (port, url) => {
@@ -200,7 +229,8 @@ export async function launchOfflineApp(app) {
     });
   });
 
-  const appWindow = window.open(serverUrl, `cas-app-${app.appId}`, "popup,width=1024,height=768");
+  stage(`server ready at ${serverUrl}; navigating window`);
+  appWindow.location.href = serverUrl;
   wireStorageSync(appWindow, app.appId);
   attachBridge(appWindow, {
     appId: app.appId,
