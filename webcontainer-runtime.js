@@ -45,7 +45,7 @@ let containerBootPromise = null;
 // already needs network access regardless (it downloads its Node.js/WASM
 // runtime from StackBlitz at boot time), so this isn't giving up offline
 // capability WebContainer-backed apps actually had.
-const WEBCONTAINER_CDN_URL = "https://cdn.jsdelivr.net/npm/@webcontainer/api@1.5.1/dist/index.js";
+const WEBCONTAINER_CDN_URL = "https://cdn.jsdelivr.net/npm/@webcontainer/api@1.6.4/dist/index.js";
 
 // WebContainer.boot() talks to a headless helper iframe StackBlitz serves
 // from w-corp-staticblitz.com, and that handshake depends on third-party
