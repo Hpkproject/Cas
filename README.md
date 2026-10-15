@@ -207,3 +207,6 @@ explicitly:
 Everything else — the `.hpk`/`.casplugin` formats, the `casf` folder layout,
 `assets.zip` packaging, and the `localStorage` round-trip — runs entirely
 client-side, no build step required.
+ 
+
+CAS
