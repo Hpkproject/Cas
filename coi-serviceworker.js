@@ -3,10 +3,11 @@
  * -----------------------------------------------------------------------
  * Runs first, before any module script (see index.html). Its only job is
  * to make sure service-worker.js — which stamps the COOP/COEP headers
- * WebContainer needs — is registered and controlling this page, reloading
- * once if it wasn't already. The actual header-injection logic lives in
- * service-worker.js itself (a scope can only have one controlling worker,
- * so it can't live in a second file registered here).
+ * the browser-native preview shell uses — is registered and controlling
+ * this page, reloading once if it wasn't already. The actual
+ * header-injection logic lives in service-worker.js itself (a scope can
+ * only have one controlling worker, so it can't live in a second file
+ * registered here).
  *
  * Two rules this bootstrap has to respect:
  *
@@ -60,7 +61,7 @@
       if (sessionStorage.getItem(RELOAD_FLAG)) {
         console.warn(
           "[CAS] still not cross-origin isolated after a reload — not reloading again. " +
-            "WebContainer-backed offline apps won't boot, but installs and the launcher still work."
+            "Offline app previews may be affected, but installs and the launcher still work."
         );
         return;
       }

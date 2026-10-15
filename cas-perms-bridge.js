@@ -25,12 +25,12 @@ const MAX_WRITE_BYTES = 25 * 1024 * 1024;
 
 /**
  * Wires up bidirectional messaging between the host and one source
- * (a Worker instance, or a served app's window). `kind` picks the
+ * (a Worker instance, or a served app's window/iframe). `kind` picks the
  * transport; everything else is identical. `origin` pins the exact
- * origin a window-hosted app's WebContainer preview was served from —
- * responses are only ever sent there, never to "*", so a reply (which
- * can carry file contents or a plugin's api.js source) can't leak to
- * wherever that window happens to navigate next.
+ * origin the app preview was served from — responses are only ever sent
+ * there, never to "*", so a reply (which can carry file contents or a
+ * plugin's api.js source) can't leak to wherever that window happens to
+ * navigate next.
  */
 export function attachBridge(source, { appId, appName, kind, origin }) {
   async function handleMessage(event) {

@@ -5,13 +5,13 @@
  * workers, plugins) calls: CAS.fs.modify(), CAS.notify(), CAS.import().
  * Exported as a template string because it has to run in three different
  * contexts that can't share a module graph: a dedicated Worker (app
- * background workers, plugin main.js), a plain window (WebContainer-
- * served offline apps), and — for reference/offline-import purposes — as
- * the literal file written to casf/CAS/apis/cas_perms.js.
+ * background workers, plugin main.js), a plain window or iframe
+ * (browser-native offline apps), and — for reference/offline-import
+ * purposes — as the literal file written to casf/CAS/apis/cas_perms.js.
  *
  * All three talk the same tiny RPC protocol to whichever host is on the
- * other end (bw-manager.js for workers, webcontainer-runtime.js's window
- * listener for served apps): {type:"cas:call", callId, method, args} out,
+ * other end (bw-manager.js for workers, the offline-runtime.js preview
+ * shell for served apps): {type:"cas:call", callId, method, args} out,
  * {type:"cas:result", callId, ok, result|error} back.
  * -----------------------------------------------------------------------
  */
@@ -24,6 +24,7 @@ export const CAS_PERMS_CLIENT_SRC = `
 
   function send(msg) {
     if (isWorkerContext) self.postMessage(msg);
+    else if (window.parent && window.parent !== window) window.parent.postMessage(msg, "*");
     else if (window.opener) window.opener.postMessage(msg, "*");
     else console.warn("[CAS] no host to talk to — CAS.* calls will hang.");
   }

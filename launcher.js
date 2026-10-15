@@ -3,12 +3,12 @@
  * -----------------------------------------------------------------------
  * Renders the CAS home screen: reads the app registry, draws a filterable
  * icon grid, and dispatches launches to the right runtime (new tab for
- * "online" apps, WebContainer runtime for "offline" apps).
+ * "online" apps, browser-native offline runtime for "offline" apps).
  * -----------------------------------------------------------------------
  */
 
 import { fs } from "./fs-manager.js";
-import { launchOfflineApp } from "./webcontainer-runtime.js";
+import { launchOfflineApp } from "./offline-runtime.js";
 
 /**
  * Mounts the launcher into `container` (the shell's main slot — see

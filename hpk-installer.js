@@ -10,6 +10,7 @@
 import { fs } from "./fs-manager.js";
 import { PERMISSIONS, declaredPermissions, showPermissionDialog } from "./permissions.js";
 import { installAppBackgroundWorker } from "./bw-manager.js";
+import { stageOfflineAppFromArchive } from "./offline-runtime.js";
 
 // Basic zip-bomb / disk-fill guards. Generous enough for a real app
 // (icons, an index.html, a modest assets/ tree) while keeping a single
@@ -250,6 +251,8 @@ async function installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updat
     hasBackgroundWorker = true;
   }
 
+  await stageOfflineAppFromArchive({ appId: appName, name: manifest.name }, zip, iconBlob);
+
   return appendRegistryEntry({
     name: manifest.name,
     desc: manifest.desc,
@@ -302,7 +305,7 @@ async function packageAssets(zip, appName) {
   );
 }
 
-/** Same zip-slip guard used when re-extracting assets.zip later — see webcontainer-runtime.js. */
+/** Same zip-slip guard used when re-extracting assets.zip later — see offline-runtime.js. */
 function sanitizeRelativePath(name) {
   const out = [];
   for (const raw of String(name).replace(/\\/g, "/").split("/")) {

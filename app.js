@@ -157,7 +157,7 @@ async function renderStorageGate(root) {
   });
 }
 
-/** Registers the shell service worker (caches index.html, stamps COOP/COEP). */
+/** Registers the shell service worker (caches index.html, stamps COOP/COEP, routes app previews). */
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.register("./service-worker.js").catch((err) => {

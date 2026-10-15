@@ -41,14 +41,6 @@ export const PROTECTED_PREFIXES = ["CAS"];
 // travels with the rest of CAS's dependencies, but the shell also ships
 // its own same-named file next to index.html, since that's the one the
 // browser can actually register early in <head>. See index.html.
-//
-// @webcontainer/api is deliberately NOT vendored here. Its published
-// build has internal relative imports between its own files (e.g.
-// "./internal/auth-state.js") that only resolve against a real,
-// hierarchical module URL — not a blob: URL reconstructed from fetched
-// text, which has no path structure for a relative import to resolve
-// against. webcontainer-runtime.js imports it directly from jsdelivr at
-// launch time instead, which mirrors the package's real file layout.
 const DEPENDENCIES = [
   {
     url: "https://unpkg.com/jszip@3.10.1/dist/jszip.min.js",

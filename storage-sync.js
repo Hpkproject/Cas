@@ -1,10 +1,9 @@
 /**
  * storage-sync.js
  * -----------------------------------------------------------------------
- * Because each offline app runs in a fresh WebContainer-served window,
- * the browser gives it a clean localStorage every time. These helpers
- * round-trip that state through casf/CAS/apps/localstorage/[appname]/
- * key-values.json so state survives across launches.
+ * Browser-native offline apps share one origin, so each app gets a
+ * storage shim that behaves like localStorage while persisting its state
+ * through casf/CAS/apps/localstorage/[appname]/key-values.json.
  * -----------------------------------------------------------------------
  */
 
@@ -43,29 +42,88 @@ export function snapshotLocalStorage(storage) {
  * *before* the app's own scripts run, that:
  *   1. hydrates localStorage from the values captured at container boot,
  *   2. captures + reports the final localStorage state on unload so the
- *      host page can persist it back to disk (postMessage, since the
- *      WebContainer page is a separate origin/window).
+ *      host page can persist it back to disk (postMessage to the preview
+ *      shell).
  */
 export function buildStorageSyncScript(initialKeyValues) {
   return `
 <script>
   (function () {
-    var initial = ${JSON.stringify(initialKeyValues)};
-    try {
-      Object.keys(initial).forEach(function (k) {
-        window.localStorage.setItem(k, initial[k]);
+    var state = ${JSON.stringify(initialKeyValues)};
+
+    function ownKeys() {
+      return Object.keys(state);
+    }
+
+    function getValue(key) {
+      key = String(key);
+      return Object.prototype.hasOwnProperty.call(state, key) ? state[key] : null;
+    }
+
+    function setValue(key, value) {
+      state[String(key)] = String(value);
+    }
+
+    function removeValue(key) {
+      delete state[String(key)];
+    }
+
+    function clearValues() {
+      ownKeys().forEach(function (key) {
+        delete state[key];
       });
-    } catch (e) {
-      console.warn("[CAS] localStorage hydration failed:", e);
+    }
+
+    function storageSnapshot() {
+      var snapshot = {};
+      ownKeys().forEach(function (key) {
+        snapshot[key] = state[key];
+      });
+      return snapshot;
+    }
+
+    var shim = {
+      get length() {
+        return ownKeys().length;
+      },
+      key: function (index) {
+        return ownKeys()[index] ?? null;
+      },
+      getItem: getValue,
+      setItem: setValue,
+      removeItem: removeValue,
+      clear: clearValues,
+    };
+
+    try {
+      Object.defineProperty(window, "localStorage", {
+        configurable: true,
+        value: shim,
+      });
+    } catch (err) {
+      try {
+        var storage = window.localStorage;
+        Object.defineProperty(storage, "length", {
+          configurable: true,
+          get: function () {
+            return ownKeys().length;
+          },
+        });
+        storage.getItem = getValue;
+        storage.setItem = setValue;
+        storage.removeItem = removeValue;
+        storage.clear = clearValues;
+        storage.key = shim.key;
+      } catch (patchErr) {
+        console.warn("[CAS] localStorage shim could not be installed:", patchErr);
+      }
     }
 
     function reportState() {
-      var snapshot = {};
-      for (var i = 0; i < window.localStorage.length; i++) {
-        var key = window.localStorage.key(i);
-        snapshot[key] = window.localStorage.getItem(key);
+      var snapshot = storageSnapshot();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "cas:localstorage-sync", snapshot: snapshot }, "*");
       }
-      window.parent.postMessage({ type: "cas:localstorage-sync", snapshot: snapshot }, "*");
     }
     window.addEventListener("beforeunload", reportState);
     window.addEventListener("pagehide", reportState);

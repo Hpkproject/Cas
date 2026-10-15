@@ -2,9 +2,10 @@
 
 Modular reference implementation: `casf` setup, the `.hpk`/`.casplugin`
 install pipelines, a sidebar launcher over a dark starfield theme, a
-WebContainer-based offline-app runtime, cross-origin isolation, a per-app
-permission system with a Settings app to manage (and uninstall) apps and
-plugins, a signed update system, and background workers.
+browser-native offline-app runtime backed by Service Worker + Cache API,
+cross-origin isolation, a per-app permission system with a Settings app
+to manage (and uninstall) apps and plugins, a signed update system, and
+background workers.
 
 ## File map
 
@@ -21,9 +22,9 @@ plugins, a signed update system, and background workers.
 | `cas-perms-client.js` | Source of the injected `CAS` global (`CAS.fs.modify`, `CAS.notify`, `CAS.import`) — runs inside apps, app background workers, and plugin workers |
 | `cas-perms-bridge.js` | Host-side counterpart: receives `CAS.*` calls over `postMessage`, checks permissions, does the actual filesystem/Notification work |
 | `launcher.js` | Reads `index.json`, renders the search + grid UI, dispatches launches, Install/Settings buttons |
-| `webcontainer-runtime.js` | Boots WebContainer, mounts app files, extracts `assets.zip`, injects the favicon + `CAS` bridge script, starts Express, opens the app window |
-| `storage-sync.js` | `localStorage` hydration/report script + `key-values.json` read/write |
-| `service-worker.js` | Caches `index.html` **and** stamps COOP/COEP headers on same-origin responses (one worker, one scope) |
+| `offline-runtime.js` | Stages each offline app into a dedicated Cache Storage namespace, injects the favicon + `CAS` bridge script + storage shim, and opens the preview iframe shell |
+| `storage-sync.js` | Per-app storage shim + `key-values.json` read/write |
+| `service-worker.js` | Serves the shell and `/apps/[appId]/*` routes from Cache Storage and stamps COOP/COEP headers on same-origin responses |
 | `coi-serviceworker.js` | Page-context bootstrap: registers `service-worker.js`, reloads at most once, and hands any pending File Handling API launch to `pending-launch.js` first |
 | `run-on-login.js` | One-time onboarding dialog guiding the user through Chromium's real "Run on OS Login" setting (unmanaged devices) |
 | `app.js` | Entry point: storage gate, launch draining, manual/drag-and-drop installs, boots background workers, mounts the launcher/Settings |
@@ -135,19 +136,11 @@ pending File Handling API launch to `pending-launch.js` — otherwise a
 double-clicked `.hpk` that triggers the very first load would have its
 launch params silently discarded by the isolation reload itself.
 
-`@webcontainer/api` is deliberately **not** vendored into casf the way
-`jszip.js` is. Its published build has its own internal relative imports
-between sibling files (e.g. `./internal/auth-state.js`), and those only
-resolve against a real, hierarchical module URL — a `blob:` URL
-reconstructed from fetched text has no path structure for a relative import
-to resolve against, which is exactly the "Invalid relative url or base
-scheme isn't hierarchical" error an earlier version of this hit on launch.
-`webcontainer-runtime.js` imports it directly from jsdelivr at launch time
-instead, which mirrors the package's real file layout. This does mean
-booting a WebContainer needs network access to that CDN — but
-`WebContainer.boot()` already needs network access regardless (it downloads
-its own Node.js/WASM runtime from StackBlitz at boot time), so nothing
-offline-capable was given up.
+The browser-native preview layer uses `/apps/[appId]/index.html` as a
+virtual mount point for each offline app. The service worker routes those
+requests to the correct `cas-app-[appId]-v1` cache bucket, falls back to
+`index.html` for SPA-style deep links, and stamps the COOP/COEP headers on
+every same-origin response so the shell keeps its isolation guarantees.
 
 ## Look and feel
 
@@ -185,10 +178,10 @@ explicitly:
   make the whole permission system pointless.
 - **Path traversal is rejected, not clamped**, both in `CAS.fs.modify`
   (`cas-perms-bridge.js`) and when extracting `assets.zip` (checked once at
-  package time in `hpk-installer.js`, and again at extract time in
-  `webcontainer-runtime.js`, since the zip is a plain file on disk between
-  those two moments). A path that tries to climb above its root is dropped
-  outright rather than silently reinterpreted.
+  package time in `hpk-installer.js`, and again when the offline cache is
+  staged in `offline-runtime.js`, since the zip is a plain file on disk
+  between those two moments). A path that tries to climb above its root is
+  dropped outright rather than silently reinterpreted.
 - **Dialog content is HTML-escaped.** Manifest fields like an app's `name`
   are attacker-controlled strings that end up in the CAS shell's own
   `innerHTML` (permission dialogs, Settings). `permissions.js` exports
@@ -205,7 +198,7 @@ explicitly:
   "unsigned but allowed" tier.
 
 Everything else — the `.hpk`/`.casplugin` formats, the `casf` folder layout,
-`assets.zip` packaging, and the `localStorage` round-trip — runs entirely
+`assets.zip` packaging, and the per-app storage shim — runs entirely
 client-side, no build step required.
  
 
