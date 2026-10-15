@@ -34,14 +34,28 @@
 
   navigator.serviceWorker
     .register("./service-worker.js")
-    .then(() => navigator.serviceWorker.ready)
-    .then(async () => {
-      if (!navigator.serviceWorker.controller || window.crossOriginIsolated) {
-        // No controller yet: this is the very first load of this origin —
-        // the worker will control (and headers will apply) starting with
-        // the next navigation, which normal use will trigger naturally.
-        return;
+    .then(async (registration) => {
+      await navigator.serviceWorker.ready;
+
+      // `ready` only guarantees that a worker is active. On the first load
+      // it may still not control this document, so wait for clients.claim()
+      // before reloading or the navigation can miss the COOP/COEP headers.
+      if (!navigator.serviceWorker.controller && registration.active) {
+        await new Promise((resolve) => {
+          const onControllerChange = () => {
+            navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+            resolve();
+          };
+
+          navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+          // clients.claim() may have completed between the first check and
+          // listener registration, so close that small race explicitly.
+          if (navigator.serviceWorker.controller) onControllerChange();
+        });
       }
+    })
+    .then(async () => {
+      if (window.crossOriginIsolated) return;
 
       if (sessionStorage.getItem(RELOAD_FLAG)) {
         console.warn(
