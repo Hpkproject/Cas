@@ -34,7 +34,7 @@
   if (window.crossOriginIsolated) return; // already isolated — nothing to do
 
   navigator.serviceWorker
-    .register(new URL("./service-worker.js?v=2", window.location.href), {
+    .register(new URL("./service-worker.js?v=3", window.location.href), {
       scope: new URL("./", window.location.href).pathname,
       updateViaCache: "none",
     })

@@ -188,7 +188,7 @@ async function renderStorageGate(root) {
 /** Registers the shell service worker (caches index.html, stamps COOP/COEP, routes app previews). */
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  const workerUrl = new URL("./service-worker.js?v=2", import.meta.url);
+  const workerUrl = new URL("./service-worker.js?v=3", import.meta.url);
   const scope = new URL("./", import.meta.url).pathname;
   navigator.serviceWorker
     .register(workerUrl, { scope, updateViaCache: "none" })

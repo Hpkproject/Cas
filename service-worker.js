@@ -14,10 +14,40 @@ const APP_CACHE_VERSION = "v2";
 const BASE_PATH = new URL("./", self.location.href).pathname.replace(/\/$/, "");
 const SHELL_URL = `${BASE_PATH}/index.html`;
 const APP_URL_PREFIX = `${BASE_PATH}/apps`;
+const SHELL_ASSETS = [
+  "index.html",
+  "app.js",
+  "launcher.js",
+  "shell.js",
+  "fs-manager.js",
+  "hpk-installer.js",
+  "plugin-installer.js",
+  "permissions.js",
+  "bw-manager.js",
+  "run-on-login.js",
+  "settings-app.js",
+  "pending-launch.js",
+  "offline-runtime.js",
+  "cas-perms-client.js",
+  "cas-perms-bridge.js",
+  "storage-sync.js",
+  "update-checker.js",
+  "uninstall.js",
+  "coi-serviceworker.js",
+  "theme.css",
+  "m3-theme.css",
+  "icons/CAS-96.png",
+  "icons/CAS-192.png",
+  "icons/CAS-512.png",
+  "icons/Hpk-96.png",
+].map((path) => `${BASE_PATH}/${path}`);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE_NAME).then((cache) => cache.add(SHELL_URL)).then(() => self.skipWaiting())
+    caches
+      .open(SHELL_CACHE_NAME)
+      .then((cache) => cache.addAll(SHELL_ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -56,7 +86,7 @@ async function routeRequest(request, clientId) {
   const isShellRequest = request.mode === "navigate" || url.pathname.endsWith("/index.html");
   if (isShellRequest) return shellResponse(request);
 
-  return withCoiHeaders(request);
+  return shellAssetResponse(request);
 }
 
 async function maybeAppResponse(request, clientId) {
@@ -137,18 +167,47 @@ function shouldKeepCache(name) {
 }
 
 async function shellResponse(request) {
+  const cache = await caches.open(SHELL_CACHE_NAME);
+  const cached = await cache.match(request, { ignoreSearch: true });
+  if (cached) {
+    refreshShellCache(request, cache);
+    return stampCoiHeaders(cached);
+  }
+
   try {
     const network = await fetch(request);
     if (network.ok) {
-      const cache = await caches.open(SHELL_CACHE_NAME);
       await cache.put(SHELL_URL, network.clone());
     }
     return stampCoiHeaders(network);
   } catch (err) {
-    const cached = await caches.match(SHELL_URL);
+    const cached = await cache.match(SHELL_URL);
     if (cached) return stampCoiHeaders(cached);
     throw err;
   }
+}
+
+async function shellAssetResponse(request) {
+  const cache = await caches.open(SHELL_CACHE_NAME);
+  const cached = await cache.match(request, { ignoreSearch: true });
+  if (cached) return stampCoiHeaders(cached);
+
+  try {
+    const network = await fetch(request);
+    if (network.ok) await cache.put(request, network.clone());
+    return stampCoiHeaders(network);
+  } catch (err) {
+    throw err;
+  }
+}
+
+function refreshShellCache(request, cache) {
+  fetch(request)
+    .then((response) => {
+      if (response.ok) return cache.put(request, response);
+      return undefined;
+    })
+    .catch(() => undefined);
 }
 
 async function withCoiHeaders(request) {
