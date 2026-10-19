@@ -10,8 +10,8 @@
 
 const SHELL_CACHE_NAME = "cas-shell-v1";
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v1";
-const BASE_PATH = new URL("./", self.registration.scope).pathname.replace(/\/$/, "");
+const APP_CACHE_VERSION = "v2";
+const BASE_PATH = new URL("./", self.location.href).pathname.replace(/\/$/, "");
 const SHELL_URL = `${BASE_PATH}/index.html`;
 const APP_URL_PREFIX = `${BASE_PATH}/apps`;
 
@@ -133,7 +133,7 @@ function appCacheName(appId) {
 }
 
 function shouldKeepCache(name) {
-  return name === SHELL_CACHE_NAME || /^cas-app-.+-v1$/.test(name);
+  return name === SHELL_CACHE_NAME || new RegExp(`^cas-app-.+-${APP_CACHE_VERSION}$`).test(name);
 }
 
 async function shellResponse(request) {

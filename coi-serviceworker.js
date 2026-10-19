@@ -34,7 +34,10 @@
   if (window.crossOriginIsolated) return; // already isolated — nothing to do
 
   navigator.serviceWorker
-    .register("./service-worker.js")
+    .register(new URL("./service-worker.js?v=2", window.location.href), {
+      scope: new URL("./", window.location.href).pathname,
+      updateViaCache: "none",
+    })
     .then(async (registration) => {
       await navigator.serviceWorker.ready;
 

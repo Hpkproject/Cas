@@ -188,9 +188,12 @@ async function renderStorageGate(root) {
 /** Registers the shell service worker (caches index.html, stamps COOP/COEP, routes app previews). */
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register("./service-worker.js").catch((err) => {
-    console.warn("[CAS] service worker registration failed:", err);
-  });
+  const workerUrl = new URL("./service-worker.js?v=2", import.meta.url);
+  const scope = new URL("./", import.meta.url).pathname;
+  navigator.serviceWorker
+    .register(workerUrl, { scope, updateViaCache: "none" })
+    .then((registration) => registration.update())
+    .catch((err) => console.warn("[CAS] service worker registration failed:", err));
 }
 
 /**

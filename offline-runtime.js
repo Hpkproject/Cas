@@ -13,11 +13,11 @@ import { CAS_PERMS_CLIENT_SRC } from "./cas-perms-client.js";
 import { attachBridge } from "./cas-perms-bridge.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v1";
+const APP_CACHE_VERSION = "v2";
 const APP_INDEX_PATH = "index.html";
 
 function appUrlPrefix() {
-  const base = new URL("./", window.location.href).pathname.replace(/\/$/, "");
+  const base = new URL("./", import.meta.url).pathname.replace(/\/$/, "");
   return `${base}/apps`;
 }
 
@@ -144,7 +144,7 @@ function injectAppShell(indexHtml, appId, storageSnapshot) {
 function mountPreview(appWindow, app) {
   const frame = appWindow.document.getElementById("cas-offline-frame");
   const status = appWindow.document.getElementById("cas-offline-status");
-  const appUrl = `${new URL("./", window.location.href).pathname.replace(/\/$/, "")}/apps/${app.appId}/${APP_INDEX_PATH}`;
+  const appUrl = `${appUrlPrefix()}/${app.appId}/${APP_INDEX_PATH}`;
 
   frame.addEventListener(
     "load",
