@@ -9,9 +9,11 @@
  */
 
 const SHELL_CACHE_NAME = "cas-shell-v1";
-const SHELL_URL = "./index.html";
 const APP_CACHE_PREFIX = "cas-app-";
 const APP_CACHE_VERSION = "v1";
+const BASE_PATH = new URL("./", self.registration.scope).pathname.replace(/\/$/, "");
+const SHELL_URL = `${BASE_PATH}/index.html`;
+const APP_URL_PREFIX = `${BASE_PATH}/apps`;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -98,7 +100,8 @@ async function resolveAppRequest(request, clientId) {
 }
 
 function parseAppPath(pathname) {
-  const match = pathname.match(/^\/apps\/([^/]+)(\/.*)?$/);
+  const escapedPrefix = APP_URL_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = pathname.match(new RegExp(`^${escapedPrefix}/([^/]+)(/.*)?$`));
   if (!match) return null;
   const appId = match[1];
   const relativePath = normalizeAppRelativePath(match[2] || "/index.html");
@@ -106,7 +109,13 @@ function parseAppPath(pathname) {
 }
 
 function shouldTreatAsAppRequest(pathname) {
-  return pathname.startsWith("/") && pathname !== "/index.html" ? true : pathname === "/" || pathname.startsWith("/assets/") || pathname === "/icon.png" || pathname.endsWith(".html") || pathname.endsWith(".js") || pathname.endsWith(".css") || pathname.endsWith(".json") || pathname.endsWith(".png") || pathname.endsWith(".jpg") || pathname.endsWith(".jpeg") || pathname.endsWith(".gif") || pathname.endsWith(".svg") || pathname.endsWith(".webp") || pathname.endsWith(".ico") || pathname.endsWith(".txt") || pathname.endsWith(".xml") || pathname.endsWith(".woff") || pathname.endsWith(".woff2") || pathname.endsWith(".mp3") || pathname.endsWith(".mp4") || pathname.endsWith(".webm") || pathname.endsWith(".pdf") || pathname.endsWith(".wasm");
+  const relativePath = pathname.startsWith(BASE_PATH)
+    ? pathname.slice(BASE_PATH.length) || "/"
+    : pathname;
+  return relativePath === "/" ||
+    relativePath === "/icon.png" ||
+    relativePath.startsWith("/assets/") ||
+    /\.(html?|js|css|json|png|jpe?g|gif|svg|webp|ico|txt|xml|woff2?|mp3|mp4|webm|pdf|wasm)$/.test(relativePath);
 }
 
 function normalizeAppRelativePath(pathname) {
@@ -116,7 +125,7 @@ function normalizeAppRelativePath(pathname) {
 
 function appRequestUrl(appId, relativePath) {
   const cleaned = String(relativePath).replace(/^\/+/, "");
-  return `${self.location.origin}/apps/${appId}/${cleaned}`;
+  return `${self.location.origin}${APP_URL_PREFIX}/${appId}/${cleaned}`;
 }
 
 function appCacheName(appId) {

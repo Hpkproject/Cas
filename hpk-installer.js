@@ -79,6 +79,13 @@ export async function parseHpk(file) {
  * depending on whether the user confirms.
  */
 export function showInstallDialog({ name, desc, icon }) {
+  const popup = window.open(
+    "",
+    "cas-package-installer",
+    "popup,width=420,height=560,resizable=yes,scrollbars=no"
+  );
+  if (popup) return showPopupInstallDialog(popup, { name, desc, icon });
+
   return new Promise((resolve) => {
     const dialog = document.createElement("dialog");
     dialog.className = "cas-dialog";
@@ -107,6 +114,86 @@ export function showInstallDialog({ name, desc, icon }) {
 
     document.body.appendChild(dialog);
     dialog.showModal();
+  });
+}
+
+function showPopupInstallDialog(popup, { name, desc, icon }) {
+  return new Promise((resolve) => {
+    const nameJson = JSON.stringify(String(name));
+    const descJson = JSON.stringify(String(desc));
+    const iconJson = JSON.stringify(String(icon || ""));
+    popup.document.open();
+    popup.document.write(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Install package</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      display: grid; place-items: center; padding: 18px;
+      background: radial-gradient(circle at 50% 0%, #33265d, #090811 68%);
+      color: #eeeafd; font: 14px/1.45 system-ui, sans-serif;
+    }
+    main {
+      width: 100%; padding: 24px 20px 18px; text-align: center;
+      border: 1px solid rgba(185,163,255,.25); border-radius: 22px;
+      background: rgba(22, 19, 38, .9); box-shadow: 0 18px 55px #0009;
+    }
+    img { width: 76px; height: 76px; border-radius: 18px; object-fit: cover; background: #171425; }
+    h1 { margin: 16px 0 8px; font-size: 21px; }
+    p { min-height: 42px; margin: 0; color: #b8b2ce; }
+    footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+    button { border: 0; border-radius: 999px; padding: 10px 18px; font: inherit; cursor: pointer; }
+    [data-action="cancel"] { color: #cfc5eb; background: transparent; }
+    [data-action="install"] { color: #170d2d; background: #b9a3ff; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <img id="icon" alt="" />
+    <h1 id="name"></h1>
+    <p id="desc"></p>
+    <footer>
+      <button data-action="cancel">Cancel</button>
+      <button data-action="install">Install</button>
+    </footer>
+  </main>
+  <script>
+    document.getElementById("name").textContent = ${nameJson};
+    document.getElementById("desc").textContent = ${descJson};
+    document.getElementById("icon").src = ${iconJson};
+    document.addEventListener("click", function (event) {
+      var action = event.target.dataset.action;
+      if (!action || !window.opener) return;
+      window.opener.postMessage({ type: "cas:install-dialog", action: action }, window.location.origin);
+    });
+  </script>
+</body>
+</html>`);
+    popup.document.close();
+    popup.focus();
+
+    const onMessage = (event) => {
+      if (event.source !== popup || event.data?.type !== "cas:install-dialog") return;
+      cleanup();
+      popup.close();
+      resolve(event.data.action === "install");
+    };
+    const closedPoll = window.setInterval(() => {
+      if (popup.closed) {
+        cleanup();
+        resolve(false);
+      }
+    }, 250);
+    function cleanup() {
+      window.clearInterval(closedPoll);
+      window.removeEventListener("message", onMessage);
+    }
+    window.addEventListener("message", onMessage);
   });
 }
 

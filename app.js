@@ -68,6 +68,7 @@ async function boot() {
   if (!restored) {
     installerReady = false;
     await renderStorageGate(root);
+    finishBootScreen();
     return;
   }
 
@@ -82,6 +83,15 @@ async function boot() {
     console.error("[CAS] background worker boot failed:", err)
   );
 
+  const pending = await readPendingLaunches();
+  if (pending.length) {
+    installerReady = true;
+    renderPackageLaunchMode(root, pending);
+    await drainPendingLaunches();
+    finishBootScreen();
+    return;
+  }
+
   const shell = mountShell(root, {
     onHome: () => boot(),
     onInstall: openInstallPicker,
@@ -90,6 +100,24 @@ async function boot() {
 
   await mountLauncherView(shell.main);
   await drainPendingLaunches();
+  finishBootScreen();
+}
+
+function renderPackageLaunchMode(root, pending) {
+  root.innerHTML = `
+    <div class="cas-space-bg" aria-hidden="true"></div>
+    <main class="cas-package-mode">
+      <div class="cas-package-mode__orb" aria-hidden="true">✦</div>
+      <p class="cas-boot-kicker">CORA APP SERVICES</p>
+      <h1>Package received</h1>
+      <p>Opening the secure installer for ${escapeHtml(describeFileList(pending))}…</p>
+    </main>
+  `;
+}
+
+function finishBootScreen() {
+  document.body.classList.add("cas-boot-complete");
+  window.setTimeout(() => document.getElementById("cas-boot-screen")?.remove(), 650);
 }
 
 async function mountLauncherView(mainEl) {

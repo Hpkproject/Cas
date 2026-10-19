@@ -1,8 +1,8 @@
 {
   "name": "Cora App Services",
   "short_name": "CAS",
-  "start_url": "./index.html",
-  "id": "./index.html",
+  "start_url": "/Cas/",
+  "id": "/Cas/",
   "display": "standalone",
   "background_color": "#141218",
   "theme_color": "#141218",
@@ -58,7 +58,7 @@
       }
     }
   ],
-  "scope": "./",
+  "scope": "/Cas/",
   "launch_handler": {
     "client_mode": "focus-existing"
   }

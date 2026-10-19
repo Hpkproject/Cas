@@ -14,8 +14,12 @@ import { attachBridge } from "./cas-perms-bridge.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
 const APP_CACHE_VERSION = "v1";
-const APP_URL_PREFIX = "/apps";
 const APP_INDEX_PATH = "index.html";
+
+function appUrlPrefix() {
+  const base = new URL("./", window.location.href).pathname.replace(/\/$/, "");
+  return `${base}/apps`;
+}
 
 export function appCacheName(appId) {
   return `${APP_CACHE_PREFIX}${appId}-${APP_CACHE_VERSION}`;
@@ -102,7 +106,7 @@ async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, 
   await caches.delete(appCacheName(appId));
   const cache = await caches.open(appCacheName(appId));
 
-  const stampedIndex = injectAppShell(indexHtml, storageSnapshot ?? {});
+  const stampedIndex = injectAppShell(indexHtml, appId, storageSnapshot ?? {});
   await cache.put(
     appRequest(appId, APP_INDEX_PATH),
     responseFromText(stampedIndex, "text/html; charset=utf-8")
@@ -116,7 +120,7 @@ async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, 
   }
 
   for (const entry of assetEntries) {
-    const urlPath = `${APP_URL_PREFIX}/${appId}/${entry.path}`;
+    const urlPath = `${appUrlPrefix()}/${appId}/${entry.path}`;
     await cache.put(
       new Request(urlPath, { method: "GET" }),
       responseFromBytes(entry.bytes, guessMimeType(entry.path))
@@ -124,8 +128,8 @@ async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, 
   }
 }
 
-function injectAppShell(indexHtml, storageSnapshot) {
-  const faviconTag = `<link rel="icon" type="image/png" href="/icon.png">`;
+function injectAppShell(indexHtml, appId, storageSnapshot) {
+  const faviconTag = `<link rel="icon" type="image/png" href="${appUrlPrefix()}/${appId}/icon.png">`;
   const storageScript = buildStorageSyncScript(storageSnapshot);
   const casScript = `<script>${CAS_PERMS_CLIENT_SRC}</script>`;
 
@@ -140,7 +144,7 @@ function injectAppShell(indexHtml, storageSnapshot) {
 function mountPreview(appWindow, app) {
   const frame = appWindow.document.getElementById("cas-offline-frame");
   const status = appWindow.document.getElementById("cas-offline-status");
-  const appUrl = `${APP_URL_PREFIX}/${app.appId}/${APP_INDEX_PATH}`;
+  const appUrl = `${new URL("./", window.location.href).pathname.replace(/\/$/, "")}/apps/${app.appId}/${APP_INDEX_PATH}`;
 
   frame.addEventListener(
     "load",
@@ -224,7 +228,7 @@ async function loadJSZip() {
 }
 
 function appRequest(appId, relativePath) {
-  return new Request(`${APP_URL_PREFIX}/${appId}/${relativePath}`, { method: "GET" });
+  return new Request(`${appUrlPrefix()}/${appId}/${relativePath}`, { method: "GET" });
 }
 
 function responseFromText(text, contentType) {
