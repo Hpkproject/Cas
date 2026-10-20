@@ -190,9 +190,9 @@ explicitly:
   not sent with `"*"`, so a reply — which can carry file contents or a
   plugin's `api.js` source — can't leak to wherever a reused window happens
   to navigate next.
-- **Size caps** on `.hpk`/update downloads, per-asset-file size, and
-  individual `CAS.fs.modify` writes guard against zip bombs and simple
-  disk-fill DoS.
+- **Size caps** on the number and decompressed size of packaged asset
+  entries, plus individual `CAS.fs.modify` writes, guard against zip bombs
+  and simple disk-fill DoS. There is no total `.hpk` archive-size limit.
 - **Update signatures are non-negotiable**: no `publicKey` pinned at install
   means no auto-update path exists for that app at all — there's no
   "unsigned but allowed" tier.

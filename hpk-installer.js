@@ -12,10 +12,8 @@ import { PERMISSIONS, declaredPermissions, showPermissionDialog } from "./permis
 import { installAppBackgroundWorker } from "./bw-manager.js";
 import { stageOfflineAppFromArchive } from "./offline-runtime.js";
 
-// Basic zip-bomb / disk-fill guards. Generous enough for a real app
-// (icons, an index.html, a modest assets/ tree) while keeping a single
-// malicious .hpk from being able to exhaust storage or hang JSZip.
-const MAX_HPK_BYTES = 200 * 1024 * 1024;
+// Basic zip-bomb / disk-fill guards keep entry counts and decompressed
+// per-file sizes bounded without imposing a total archive-size limit.
 const MAX_ASSET_ENTRIES = 20000;
 const MAX_ASSET_ENTRY_BYTES = 50 * 1024 * 1024;
 
@@ -45,10 +43,6 @@ async function loadJSZip() {
  * manifest plus the live JSZip instance for later extraction.
  */
 export async function parseHpk(file) {
-  if (file.size > MAX_HPK_BYTES) {
-    throw new Error(`.hpk is too large (${(file.size / 1024 / 1024).toFixed(1)}MB, limit ${MAX_HPK_BYTES / 1024 / 1024}MB).`);
-  }
-
   const JSZip = await loadJSZip();
   const zip = await JSZip.loadAsync(file);
 
@@ -135,21 +129,21 @@ function showPopupInstallDialog(popup, { name, desc, icon }) {
     html, body { margin: 0; min-height: 100%; }
     body {
       display: grid; place-items: center; padding: 18px;
-      background: radial-gradient(circle at 50% 0%, #33265d, #090811 68%);
+      background: #000;
       color: #eeeafd; font: 14px/1.45 system-ui, sans-serif;
     }
     main {
       width: 100%; padding: 24px 20px 18px; text-align: center;
-      border: 1px solid rgba(185,163,255,.25); border-radius: 22px;
-      background: rgba(22, 19, 38, .9); box-shadow: 0 18px 55px #0009;
+      border: 1px solid #252525; border-radius: 8px;
+      background: #050505; box-shadow: 0 10px 30px #000;
     }
-    img { width: 76px; height: 76px; border-radius: 18px; object-fit: cover; background: #171425; }
-    h1 { margin: 16px 0 8px; font-size: 21px; }
-    p { min-height: 42px; margin: 0; color: #b8b2ce; }
+    img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: #151515; }
+    h1 { margin: 14px 0 8px; font-size: 20px; }
+    p { min-height: 42px; margin: 0; color: #aaa; }
     footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
     button { border: 0; border-radius: 999px; padding: 10px 18px; font: inherit; cursor: pointer; }
-    [data-action="cancel"] { color: #cfc5eb; background: transparent; }
-    [data-action="install"] { color: #170d2d; background: #b9a3ff; font-weight: 700; }
+    [data-action="cancel"] { color: #ccc; background: transparent; }
+    [data-action="install"] { color: #000; background: #fff; font-weight: 700; }
   </style>
 </head>
 <body>

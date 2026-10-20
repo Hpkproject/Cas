@@ -89,6 +89,9 @@ async function boot() {
     renderPackageLaunchMode(root, pending);
     await drainPendingLaunches();
     finishBootScreen();
+    if ((await readPendingLaunches()).length === 0) {
+      closePackageHostWindow();
+    }
     return;
   }
 
@@ -113,6 +116,15 @@ function renderPackageLaunchMode(root, pending) {
       <p>Opening the secure installer for ${escapeHtml(describeFileList(pending))}…</p>
     </main>
   `;
+}
+
+function closePackageHostWindow() {
+  window.setTimeout(() => {
+    window.close();
+    if (!window.closed) {
+      document.body.classList.add("cas-package-host-closed");
+    }
+  }, 100);
 }
 
 function finishBootScreen() {

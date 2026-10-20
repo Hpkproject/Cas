@@ -41,8 +41,6 @@ export const UPDATE_MANIFEST_FORMAT = Object.freeze({
   notes: "string, optional",
 });
 
-const MAX_UPDATE_HPK_BYTES = 200 * 1024 * 1024;
-
 /** Reads the app registry, filtered to entries that can actually be auto-updated. */
 async function updatableApps() {
   const raw = await fs.readText(["CAS", "apps", "index.json"]);
@@ -104,10 +102,6 @@ export async function applyUpdate({ app, hpkUrl, signature }) {
   if (!res.ok) throw new Error(`Failed to download update: HTTP ${res.status}`);
 
   const blob = await res.blob();
-  if (blob.size > MAX_UPDATE_HPK_BYTES) {
-    throw new Error(`Update .hpk is too large (${(blob.size / 1024 / 1024).toFixed(1)}MB).`);
-  }
-
   const valid = await verifyHpkSignature(blob, signature, app.publicKey);
   if (!valid) {
     throw new Error(

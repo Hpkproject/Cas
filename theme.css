@@ -170,6 +170,10 @@ html, body {
   animation: cas-boot-pulse 1.8s ease-in-out infinite;
 }
 
+.cas-package-host-closed #root {
+  display: none;
+}
+
 @keyframes cas-boot-spin { to { transform: rotate(385deg) scaleY(0.36); } }
 @keyframes cas-boot-pulse { 50% { transform: scale(1.08); } }
 @keyframes cas-boot-dots { from { width: 0; } to { width: 20px; } }
