@@ -272,6 +272,16 @@ html, body {
   transition: background-color 120ms ease, color 120ms ease;
 }
 
+.cas-sidebar__btn svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .cas-sidebar__btn:hover,
 .cas-sidebar__btn:focus-visible {
   background: rgba(185, 163, 255, 0.12);
@@ -293,6 +303,60 @@ html, body {
   min-width: 0;
   padding: 32px;
   overflow-y: auto;
+}
+
+.cas-settings-window {
+  min-height: 100vh;
+  display: flex;
+  background: var(--color-surface);
+}
+
+.cas-settings-window__sidebar {
+  width: 220px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px 14px;
+  border-right: 1px solid var(--color-outline);
+  background: rgba(10, 9, 18, 0.8);
+}
+
+.cas-settings-window__brand {
+  padding: 8px 14px 28px;
+  color: var(--color-primary);
+  font-weight: 800;
+  letter-spacing: .2em;
+}
+
+.cas-settings-nav,
+.cas-settings-window__close {
+  border: 0;
+  border-radius: var(--shape-md);
+  padding: 12px 14px;
+  color: var(--color-text-dim);
+  background: transparent;
+  text-align: left;
+  font: var(--type-label);
+  cursor: pointer;
+}
+
+.cas-settings-nav:hover,
+.cas-settings-nav.is-active {
+  color: var(--color-text);
+  background: rgba(185, 163, 255, .14);
+}
+
+.cas-settings-window__close {
+  margin-top: auto;
+  color: var(--color-primary);
+}
+
+.cas-settings-window__main {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 32px;
 }
 
 /* -------------------------------------------------------------------- */

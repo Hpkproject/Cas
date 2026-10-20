@@ -12,6 +12,16 @@ import { PERMISSIONS, declaredPermissions, showPermissionDialog } from "./permis
 import { installAppBackgroundWorker } from "./bw-manager.js";
 import { stageOfflineAppFromArchive } from "./offline-runtime.js";
 
+let installPopupOpened = false;
+
+export function didOpenInstallPopup() {
+  return installPopupOpened;
+}
+
+export function resetInstallPopupState() {
+  installPopupOpened = false;
+}
+
 // Basic zip-bomb / disk-fill guards keep entry counts and decompressed
 // per-file sizes bounded without imposing a total archive-size limit.
 const MAX_ASSET_ENTRIES = 20000;
@@ -78,6 +88,7 @@ export function showInstallDialog({ name, desc, icon }) {
     "cas-package-installer",
     "popup,width=420,height=560,resizable=yes,scrollbars=no"
   );
+  installPopupOpened = Boolean(popup);
   if (popup) return showPopupInstallDialog(popup, { name, desc, icon });
 
   return new Promise((resolve) => {

@@ -15,7 +15,7 @@
  */
 
 import { fs } from "./fs-manager.js";
-import { installHpk } from "./hpk-installer.js";
+import { didOpenInstallPopup, installHpk, resetInstallPopupState } from "./hpk-installer.js";
 import { installCasPlugin } from "./plugin-installer.js";
 import { mountLauncher } from "./launcher.js";
 import { mountShell } from "./shell.js";
@@ -36,6 +36,7 @@ captureLaunches();
 let installerReady = false;
 let refreshLauncher = async () => {};
 let draining = false;
+let packageHostMode = false;
 
 // A launch can land at any time — including on an already-open CAS
 // window, which is what "launch_handler: focus-existing" gives us.
@@ -85,11 +86,13 @@ async function boot() {
 
   const pending = await readPendingLaunches();
   if (pending.length) {
+    packageHostMode = true;
+    resetInstallPopupState();
     installerReady = true;
     renderPackageLaunchMode(root, pending);
     await drainPendingLaunches();
     finishBootScreen();
-    if ((await readPendingLaunches()).length === 0) {
+    if (packageHostMode && didOpenInstallPopup() && (await readPendingLaunches()).length === 0) {
       closePackageHostWindow();
     }
     return;
@@ -98,7 +101,7 @@ async function boot() {
   const shell = mountShell(root, {
     onHome: () => boot(),
     onInstall: openInstallPicker,
-    onSettings: () => openSettingsApp(shell.main, () => returnHome(shell)),
+    onSettings: () => openSettingsApp(),
   });
 
   await mountLauncherView(shell.main);
