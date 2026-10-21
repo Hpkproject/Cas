@@ -8,7 +8,7 @@
  * -----------------------------------------------------------------------
  */
 
-const SHELL_CACHE_NAME = "cas-shell-v1";
+const SHELL_CACHE_NAME = "cas-shell-v2";
 const APP_CACHE_PREFIX = "cas-app-";
 const APP_CACHE_VERSION = "v2";
 const BASE_PATH = new URL("./", self.location.href).pathname.replace(/\/$/, "");

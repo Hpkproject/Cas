@@ -34,7 +34,7 @@
   if (window.crossOriginIsolated) return; // already isolated — nothing to do
 
   navigator.serviceWorker
-    .register(new URL("./service-worker.js?v=3", window.location.href), {
+    .register(new URL("./service-worker.js?v=4", window.location.href), {
       scope: new URL("./", window.location.href).pathname,
       updateViaCache: "none",
     })
@@ -72,8 +72,15 @@
       // Hand any double-clicked .hpk/.casplugin to the durable stash
       // before the navigation throws this document's launch params away.
       try {
-        const { launchCaptureSettled } = await import("./pending-launch.js");
+        const { launchCaptureSettled, readPendingLaunches } = await import("./pending-launch.js");
         await launchCaptureSettled();
+        if ((await readPendingLaunches()).length > 0) {
+          // A File Handling API handle can become unreadable after a
+          // cross-origin-isolation reload, especially for very large files.
+          // Let app.js consume it in this document while its launch grant
+          // is still valid.
+          return;
+        }
       } catch (err) {
         console.warn("[CAS] could not pre-capture launch params before reload:", err);
       }

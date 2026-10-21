@@ -203,7 +203,7 @@ async function renderStorageGate(root) {
 /** Registers the shell service worker (caches index.html, stamps COOP/COEP, routes app previews). */
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  const workerUrl = new URL("./service-worker.js?v=3", import.meta.url);
+  const workerUrl = new URL("./service-worker.js?v=4", import.meta.url);
   const scope = new URL("./", import.meta.url).pathname;
   navigator.serviceWorker
     .register(workerUrl, { scope, updateViaCache: "none" })
@@ -256,8 +256,7 @@ async function readLaunchedFile(entry) {
     return await handle.getFile();
   } catch (err) {
     console.error(`[CAS] could not read launched file "${entry.name}":`, err);
-    await dropPendingLaunch(entry.id);
-    alert(`Could not read "${entry.name}": ${err.message}`);
+    showResumeBanner(entry, handle, `Could not read "${entry.name}". Try again.`);
     return null;
   }
 }
@@ -266,7 +265,7 @@ async function readLaunchedFile(entry) {
  * Banner offering the click a re-permission prompt needs. Without it a
  * stashed launch would just sit there invisibly.
  */
-function showResumeBanner(entry, handle) {
+function showResumeBanner(entry, handle, message = null) {
   if (document.getElementById("cas-resume-banner")) return;
 
   const banner = document.createElement("div");
@@ -276,22 +275,28 @@ function showResumeBanner(entry, handle) {
     <span class="cas-banner__text"></span>
     <button class="cas-btn cas-btn--filled" type="button">Continue</button>
   `;
-  banner.querySelector(".cas-banner__text").textContent = `Install ${entry.name}?`;
+  banner.querySelector(".cas-banner__text").textContent = message || `Install ${entry.name}?`;
 
   banner.querySelector("button").addEventListener("click", async () => {
     banner.remove();
     try {
       const state = await handle.requestPermission({ mode: "read" });
       if (state !== "granted") {
-        await dropPendingLaunch(entry.id);
         return;
       }
-    } catch (err) {
+      const file = await handle.getFile();
       await dropPendingLaunch(entry.id);
+      await installFromFile(file);
+      await refreshLauncher();
+      if (packageHostMode && (await readPendingLaunches()).length === 0) {
+        closePackageHostWindow();
+      }
+      return;
+    } catch (err) {
+      console.error(`[CAS] retry could not read launched file "${entry.name}":`, err);
       alert(`Could not read "${entry.name}": ${err.message}`);
       return;
     }
-    await drainPendingLaunches();
   });
 
   document.body.appendChild(banner);
