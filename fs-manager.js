@@ -275,6 +275,14 @@ async function fileExists(dirHandle, fileName) {
 }
 
 async function writeFile(dirHandle, fileName, data) {
+  if (
+    !fileName ||
+    fileName === "." ||
+    fileName === ".." ||
+    /[\/\\]/.test(fileName)
+  ) {
+    throw new TypeError(`Invalid CAS file name "${fileName}".`);
+  }
   const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
   const writable = await fileHandle.createWritable();
   await writable.write(data);
