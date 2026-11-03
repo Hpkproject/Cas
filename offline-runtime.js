@@ -26,6 +26,16 @@ export function appCacheName(appId) {
   return `${APP_CACHE_PREFIX}${appId}-${APP_CACHE_VERSION}`;
 }
 
+async function clearAppCaches(appId) {
+  const prefix = `${APP_CACHE_PREFIX}${appId}-`;
+  const names = await caches.keys();
+  await Promise.all(
+    names
+      .filter((name) => name.startsWith(prefix))
+      .map((name) => caches.delete(name))
+  );
+}
+
 /**
  * Launches one installed offline app by ensuring its cache namespace is
  * hydrated, then opening a same-origin popup shell that mounts the app in
@@ -106,33 +116,78 @@ export async function stageOfflineAppFromArchive(app, zip, iconBlob, onProgress 
 }
 
 async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, storageSnapshot, onProgress = () => {} }) {
-  await caches.delete(appCacheName(appId));
+  await clearAppCaches(appId);
+  if (navigator.storage?.persist) {
+    try {
+      const persistent = await navigator.storage.persist();
+      console.info(`[CAS] persistent browser storage for "${appId}": ${persistent ? "enabled" : "not granted"}`);
+    } catch (err) {
+      console.warn(`[CAS] could not request persistent storage for "${appId}":`, err);
+    }
+  }
+  if (navigator.storage?.estimate) {
+    const estimate = await navigator.storage.estimate();
+    const used = estimate.usage ?? 0;
+    const quota = estimate.quota ?? 0;
+    console.info(
+      `[CAS] storage before caching "${appId}": ${formatBytes(used)} used of ${formatBytes(quota)} quota`
+    );
+  }
   const cache = await caches.open(appCacheName(appId));
 
-  const stampedIndex = injectAppShell(indexHtml, appId, storageSnapshot ?? {});
-  await cache.put(
-    appRequest(appId, APP_INDEX_PATH),
-    responseFromText(stampedIndex, "text/html; charset=utf-8")
-  );
-
-  if (iconBlob) {
+  try {
+    const stampedIndex = injectAppShell(indexHtml, appId, storageSnapshot ?? {});
     await cache.put(
-      appRequest(appId, "icon.png"),
-      responseFromBlob(iconBlob, "image/png")
+      appRequest(appId, APP_INDEX_PATH),
+      responseFromText(stampedIndex, "text/html; charset=utf-8")
     );
-  }
 
-  for (const [index, entry] of assetEntries.entries()) {
-    const urlPath = `${appUrlPrefix()}/${appId}/${entry.path}`;
-    const bytes = entry.zipEntry
-      ? new Uint8Array(await entry.zipEntry.async("uint8array"))
-      : entry.bytes;
-    await cache.put(
-      new Request(urlPath, { method: "GET" }),
-      responseFromBytes(bytes, guessMimeType(entry.path))
-    );
-    onProgress(index + 1, assetEntries.length || 1);
+    if (iconBlob) {
+      await cache.put(
+        appRequest(appId, "icon.png"),
+        responseFromBlob(iconBlob, "image/png")
+      );
+    }
+
+    for (const [index, entry] of assetEntries.entries()) {
+      const urlPath = `${appUrlPrefix()}/${appId}/${entry.path}`;
+      const bytes = entry.zipEntry
+        ? new Uint8Array(await entry.zipEntry.async("uint8array"))
+        : entry.bytes;
+      await cache.put(
+        new Request(urlPath, { method: "GET" }),
+        responseFromBytes(bytes, guessMimeType(entry.path))
+      );
+      onProgress(index + 1, assetEntries.length || 1);
+    }
+  } catch (err) {
+    await caches.delete(appCacheName(appId));
+    if (err?.name === "QuotaExceededError" || /quota exceeded/i.test(String(err?.message))) {
+      const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : null;
+      const used = estimate?.usage ?? 0;
+      const quota = estimate?.quota ?? 0;
+      console.error(
+        `[CAS] browser storage quota reached while caching "${appId}" ` +
+        `(${formatBytes(used)} used of ${formatBytes(quota)} quota). ` +
+        "Free disk space does not increase this per-site browser quota.",
+        err
+      );
+    }
+    throw err;
   }
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "unknown";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = units[0];
+  for (const next of units.slice(1)) {
+    if (value < 1024) break;
+    value /= 1024;
+    unit = next;
+  }
+  return `${value.toFixed(1)} ${unit}`;
 }
 
 function injectAppShell(indexHtml, appId, storageSnapshot) {
