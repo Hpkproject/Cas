@@ -172,8 +172,36 @@ async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, 
         "Free disk space does not increase this per-site browser quota.",
         err
       );
+      await persistAppFilesToDisk({
+        appId,
+        indexHtml,
+        iconBlob,
+        assetEntries,
+        onProgress,
+      });
+      console.warn(
+        `[CAS] Cache API quota reached for "${appId}"; app files were written directly to the CAS storage folder.`
+      );
+      return;
     }
     throw err;
+  }
+}
+
+async function persistAppFilesToDisk({ appId, indexHtml, iconBlob, assetEntries, onProgress }) {
+  await fs.writeFile(["CAS", "apps", appId, "index.html"], injectAppShell(indexHtml, appId, {}));
+  if (iconBlob) {
+    await fs.writeFile(["CAS", "apps", appId, "icon.png"], iconBlob);
+  }
+  for (const [index, entry] of assetEntries.entries()) {
+    const bytes = entry.zipEntry
+      ? new Uint8Array(await entry.zipEntry.async("uint8array"))
+      : entry.bytes;
+    await fs.writeFile(
+      ["CAS", "apps", appId, ...entry.path.split("/")],
+      new Blob([bytes], { type: guessMimeType(entry.path) })
+    );
+    onProgress(index + 1, assetEntries.length || 1);
   }
 }
 
@@ -242,16 +270,18 @@ async function readAssetEntriesFromDisk(appId) {
     const zip = await openZip(zipFile);
     return collectAssetEntriesFromZip(zip, appId);
   } catch {
-    return collectAssetFilesFromDirectory(assetsDir, "");
+    const appDir = await fs.getDir(["CAS", "apps", appId]);
+    return collectAssetFilesFromDirectory(appDir, "", new Set(["index.html", "icon.png"]));
   }
 }
 
-async function collectAssetFilesFromDirectory(directory, prefix) {
+async function collectAssetFilesFromDirectory(directory, prefix, excluded = new Set()) {
   const entries = [];
   for await (const handle of directory.values()) {
     const path = prefix ? `${prefix}/${handle.name}` : handle.name;
+    if (excluded.has(path)) continue;
     if (handle.kind === "directory") {
-      entries.push(...await collectAssetFilesFromDirectory(handle, path));
+      entries.push(...await collectAssetFilesFromDirectory(handle, path, excluded));
       continue;
     }
     const file = await handle.getFile();
