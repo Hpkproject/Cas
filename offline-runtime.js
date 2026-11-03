@@ -92,7 +92,7 @@ export async function stageOfflineAppFromArchive(app, zip, iconBlob, onProgress 
   }
 
   const indexHtml = await manifestIndex.async("string");
-  const assetEntries = await collectAssetEntriesFromZip(zip, app.appId);
+  const assetEntries = collectAssetEntriesFromZip(zip, app.appId);
   onProgress(0, assetEntries.length || 1);
   const storageSnapshot = await loadPersistedStorage(app.appId);
   await stageOfflineAppCache({
@@ -124,9 +124,12 @@ async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, 
 
   for (const [index, entry] of assetEntries.entries()) {
     const urlPath = `${appUrlPrefix()}/${appId}/${entry.path}`;
+    const bytes = entry.zipEntry
+      ? new Uint8Array(await entry.zipEntry.async("uint8array"))
+      : entry.bytes;
     await cache.put(
       new Request(urlPath, { method: "GET" }),
-      responseFromBytes(entry.bytes, guessMimeType(entry.path))
+      responseFromBytes(bytes, guessMimeType(entry.path))
     );
     onProgress(index + 1, assetEntries.length || 1);
   }
@@ -205,7 +208,7 @@ async function collectAssetFilesFromDirectory(directory, prefix) {
   return entries;
 }
 
-async function collectAssetEntriesFromZip(zip, appId) {
+function collectAssetEntriesFromZip(zip, appId) {
   const entries = [];
   const looksLikeHpk = Object.values(zip.files).some(
     (entry) => !entry.dir && (entry.name === "manifest.json" || entry.name === "index.html" || entry.name === "icon.png")
@@ -229,8 +232,7 @@ async function collectAssetEntriesFromZip(zip, appId) {
       console.warn(`[CAS] skipped unsafe asset path in "${appId}": ${entry.name}`);
       continue;
     }
-    const bytes = new Uint8Array(await entry.async("uint8array"));
-    entries.push({ path: relativePath, bytes });
+    entries.push({ path: relativePath, zipEntry: entry });
   }
   return entries;
 }

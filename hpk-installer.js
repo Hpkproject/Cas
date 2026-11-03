@@ -445,7 +445,10 @@ async function installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updat
     { appId: appName, name: manifest.name },
     zip,
     iconBlob,
-    (completed, total) => report("Caching app files", completed, total)
+    (completed, total) => {
+      const cachePercent = 45 + Math.round((completed / Math.max(1, total)) * 50);
+      report("Unzipping and caching app files", cachePercent, 100);
+    }
   );
   report("Registering app", 95, 100);
 
