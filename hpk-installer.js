@@ -2,7 +2,7 @@
  * hpk-installer.js
  * -----------------------------------------------------------------------
  * Parses .hpk archives (ZIP-with-a-different-extension) using the
- * locally-vendored jszip.js, shows a Material 3 install confirmation
+ * locally-vendored jszip.js with a native unzipper fallback, shows a Material 3 install confirmation
  * dialog, and routes installation to disk under casf/CAS/apps/.
  * -----------------------------------------------------------------------
  */
@@ -11,6 +11,7 @@ import { fs } from "./fs-manager.js";
 import { PERMISSIONS, declaredPermissions, showPermissionDialog } from "./permissions.js";
 import { installAppBackgroundWorker } from "./bw-manager.js";
 import { stageOfflineAppFromArchive } from "./offline-runtime.js";
+import { openZip } from "./zip-reader.js";
 
 let installPopupOpened = false;
 
@@ -53,8 +54,17 @@ async function loadJSZip() {
  * manifest plus the live JSZip instance for later extraction.
  */
 export async function parseHpk(file) {
-  const JSZip = await loadJSZip();
-  const zip = await JSZip.loadAsync(file);
+  let zip;
+  try {
+    const JSZip = await loadJSZip();
+    zip = await JSZip.loadAsync(file, {
+      checkCRC32: false,
+      createFolders: false,
+    });
+  } catch (err) {
+    console.warn("[CAS] JSZip could not read the archive; switching to the native unzipper.", err);
+    zip = await openZip(file);
+  }
 
   const manifestEntry = zip.file("manifest.json");
   if (!manifestEntry) {
@@ -364,6 +374,26 @@ async function installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updat
  * the assets/ subtree (zip slip: "assets/../../evil.js") are dropped.
  */
 async function packageAssets(zip, appName) {
+  if (!zip.generateAsync) {
+    const assetEntries = zip.folder("assets") ? zip.filter((path) => path.startsWith("assets/")) : [];
+    if (assetEntries.length > MAX_ASSET_ENTRIES) {
+      throw new Error(`Invalid .hpk: too many files under assets/ (${assetEntries.length}).`);
+    }
+    for (const entry of assetEntries) {
+      if (entry.dir) continue;
+      const relativePath = sanitizeRelativePath(entry.name.slice("assets/".length));
+      if (relativePath === null) {
+        console.warn(`[CAS] skipped unsafe asset path in "${appName}": ${entry.name}`);
+        continue;
+      }
+      const content = await entry.async("blob");
+      if (content.size > MAX_ASSET_ENTRY_BYTES) {
+        throw new Error(`Invalid .hpk: asset "${entry.name}" exceeds the per-file size limit.`);
+      }
+      await fs.writeFile(["CAS", "apps", "assets", appName, relativePath], content);
+    }
+    return;
+  }
   const JSZip = await loadJSZip();
   const assetsZip = new JSZip();
 

@@ -11,6 +11,7 @@ import { fs } from "./fs-manager.js";
 import { loadPersistedStorage, buildStorageSyncScript } from "./storage-sync.js";
 import { CAS_PERMS_CLIENT_SRC } from "./cas-perms-client.js";
 import { attachBridge } from "./cas-perms-bridge.js";
+import { openZip } from "./zip-reader.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
 const APP_CACHE_VERSION = "v2";
@@ -173,16 +174,32 @@ function mountPreview(appWindow, app) {
 }
 
 async function readAssetEntriesFromDisk(appId) {
+  const assetsDir = await fs.getDir(["CAS", "apps", "assets", appId]);
   try {
-    const assetsDir = await fs.getDir(["CAS", "apps", "assets", appId]);
     const zipHandle = await assetsDir.getFileHandle("assets.zip");
     const zipFile = await zipHandle.getFile();
-    const JSZip = await loadJSZip();
-    const zip = await JSZip.loadAsync(zipFile);
+    const zip = await openZip(zipFile);
     return collectAssetEntriesFromZip(zip, appId);
   } catch {
-    return [];
+    return collectAssetFilesFromDirectory(assetsDir, "");
   }
+}
+
+async function collectAssetFilesFromDirectory(directory, prefix) {
+  const entries = [];
+  for await (const handle of directory.values()) {
+    const path = prefix ? `${prefix}/${handle.name}` : handle.name;
+    if (handle.kind === "directory") {
+      entries.push(...await collectAssetFilesFromDirectory(handle, path));
+      continue;
+    }
+    const file = await handle.getFile();
+    entries.push({
+      path,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    });
+  }
+  return entries;
 }
 
 async function collectAssetEntriesFromZip(zip, appId) {
@@ -213,18 +230,6 @@ async function collectAssetEntriesFromZip(zip, appId) {
     entries.push({ path: relativePath, bytes });
   }
   return entries;
-}
-
-let cachedJSZip = null;
-async function loadJSZip() {
-  if (cachedJSZip) return cachedJSZip;
-  const text = await fs.readText(["CAS", "sys", "api", "3rd-party", "jszip.js"]);
-  if (!text) {
-    throw new Error("jszip.js is missing from 3rd-party/ — run FsManager.ensureDependencies() first.");
-  }
-  const factory = new Function(`${text}\nreturn JSZip;`);
-  cachedJSZip = factory();
-  return cachedJSZip;
 }
 
 function appRequest(appId, relativePath) {

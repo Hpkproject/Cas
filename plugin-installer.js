@@ -16,6 +16,7 @@
 import { fs } from "./fs-manager.js";
 import { showInstallDialog } from "./hpk-installer.js";
 import { installPluginWorkerFiles } from "./bw-manager.js";
+import { openZip } from "./zip-reader.js";
 
 let JSZipCtor = null;
 async function loadJSZip() {
@@ -31,8 +32,14 @@ async function loadJSZip() {
 
 /** Parses a .casplugin File into its manifest + live JSZip instance. */
 export async function parseCasPlugin(file) {
-  const JSZip = await loadJSZip();
-  const zip = await JSZip.loadAsync(file);
+  let zip;
+  try {
+    const JSZip = await loadJSZip();
+    zip = await JSZip.loadAsync(file);
+  } catch (err) {
+    console.warn("[CAS] JSZip could not read the plugin; switching to the native unzipper.", err);
+    zip = await openZip(file);
+  }
 
   const manifestEntry = zip.file("manifest.json");
   if (!manifestEntry) {

@@ -251,11 +251,23 @@ async function readLaunchedFile(entry) {
         return null;
       }
     }
-    return await handle.getFile();
+    return await getFileWithRetry(handle);
   } catch (err) {
     console.error(`[CAS] could not read launched file "${entry.name}":`, err);
     showResumeBanner(entry, handle, `Could not read "${entry.name}". Try again.`);
     return null;
+  }
+
+  async function getFileWithRetry(handle) {
+    try {
+      return await handle.getFile();
+    } catch (firstError) {
+      if (typeof handle.requestPermission !== "function") throw firstError;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const state = await handle.requestPermission({ mode: "read" });
+      if (state !== "granted") throw firstError;
+      return handle.getFile();
+    }
   }
 }
 
