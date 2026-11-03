@@ -390,7 +390,10 @@ async function packageAssets(zip, appName) {
       if (content.size > MAX_ASSET_ENTRY_BYTES) {
         throw new Error(`Invalid .hpk: asset "${entry.name}" exceeds the per-file size limit.`);
       }
-      await fs.writeFile(["CAS", "apps", "assets", appName, relativePath], content);
+      await fs.writeFile(
+        ["CAS", "apps", "assets", appName, ...relativePath.split("/")],
+        content
+      );
     }
     return;
   }
