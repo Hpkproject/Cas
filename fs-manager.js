@@ -87,7 +87,7 @@ async function idbSet(key, value) {
  */
 async function ensureDirPath(rootHandle, segments) {
   let dir = rootHandle;
-  for (const segment of segments) {
+  for (const segment of normalizePathSegments(segments)) {
     dir = await dir.getDirectoryHandle(segment, { create: true });
   }
   return dir;
@@ -98,12 +98,30 @@ async function ensureDirPath(rootHandle, segments) {
  * root-relative) into its parent directory handle + leaf file name.
  */
 async function resolvePath(rootHandle, segments, { createDirs = true } = {}) {
-  const dirSegments = segments.slice(0, -1);
-  const fileName = segments[segments.length - 1];
+  const normalized = normalizePathSegments(segments);
+  if (normalized.length === 0) {
+    throw new TypeError("CAS filesystem path must contain a file name.");
+  }
+  const dirSegments = normalized.slice(0, -1);
+  const fileName = normalized[normalized.length - 1];
   const dir = createDirs
     ? await ensureDirPath(rootHandle, dirSegments)
     : await walkExisting(rootHandle, dirSegments);
   return { dir, fileName };
+}
+
+function normalizePathSegments(segments) {
+  const normalized = [];
+  for (const rawSegment of segments) {
+    for (const segment of String(rawSegment).replace(/\\/g, "/").split("/")) {
+      if (!segment || segment === ".") continue;
+      if (segment === "..") {
+        throw new TypeError("CAS filesystem paths cannot contain '..'.");
+      }
+      normalized.push(segment);
+    }
+  }
+  return normalized;
 }
 
 async function walkExisting(rootHandle, segments) {
