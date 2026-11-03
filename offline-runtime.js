@@ -151,13 +151,20 @@ async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, 
 
     for (const [index, entry] of assetEntries.entries()) {
       const urlPath = `${appUrlPrefix()}/${appId}/${entry.path}`;
-      const bytes = entry.zipEntry
-        ? new Uint8Array(await entry.zipEntry.async("uint8array"))
-        : entry.bytes;
-      await cache.put(
-        new Request(urlPath, { method: "GET" }),
-        responseFromBytes(bytes, guessMimeType(entry.path))
-      );
+      try {
+        const bytes = entry.zipEntry
+          ? new Uint8Array(await entry.zipEntry.async("uint8array"))
+          : entry.bytes;
+        await cache.put(
+          new Request(urlPath, { method: "GET" }),
+          responseFromBytes(bytes, guessMimeType(entry.path))
+        );
+      } catch (err) {
+        if (err?.name === "QuotaExceededError" || /quota exceeded/i.test(String(err?.message))) {
+          throw err;
+        }
+        console.error(`[CAS] skipped unreadable asset "${entry.path}"; continuing installation:`, err);
+      }
       onProgress(index + 1, assetEntries.length || 1);
     }
   } catch (err) {
@@ -195,9 +202,11 @@ async function persistAppFilesToDisk({ appId, indexHtml, iconBlob, assetEntries,
   }
   console.info(`[CAS] writing ${assetEntries.length} app files directly to CAS storage for "${appId}"`);
   for (const [index, entry] of assetEntries.entries()) {
-    const bytes = entry.zipEntry
-      ? new Uint8Array(await entry.zipEntry.async("uint8array"))
-      : entry.bytes;
+    if (shouldSkipDirectAsset(entry.path)) {
+      console.info(`[CAS] skipping metadata asset "${entry.path}" in direct-storage mode`);
+      onProgress(index + 1, assetEntries.length || 1);
+      continue;
+    }
     const pathSegments = safeStorageSegments(entry.path);
     if (!pathSegments) {
       console.warn(`[CAS] skipped asset that cannot be represented in CAS storage: ${entry.path}`);
@@ -205,6 +214,9 @@ async function persistAppFilesToDisk({ appId, indexHtml, iconBlob, assetEntries,
       continue;
     }
     try {
+      const bytes = entry.zipEntry
+        ? new Uint8Array(await entry.zipEntry.async("uint8array"))
+        : entry.bytes;
       await fs.writeFile(
         ["CAS", "apps", appId, ...pathSegments],
         new Blob([bytes], { type: guessMimeType(entry.path) })
@@ -214,6 +226,17 @@ async function persistAppFilesToDisk({ appId, indexHtml, iconBlob, assetEntries,
     }
     onProgress(index + 1, assetEntries.length || 1);
   }
+}
+
+function shouldSkipDirectAsset(path) {
+  const segments = String(path).split("/");
+  return segments.some((segment) =>
+    segment === ".git" ||
+    segment === ".svn" ||
+    segment === ".hg" ||
+    segment.toLowerCase() === "thumbs.db" ||
+    segment.toLowerCase() === ".ds_store"
+  );
 }
 
 function safeStorageSegments(path) {
@@ -337,6 +360,10 @@ function collectAssetEntriesFromZip(zip, appId) {
     const relativePath = sanitizeRelativePath(rawPath);
     if (!relativePath) {
       console.warn(`[CAS] skipped unsafe asset path in "${appId}": ${entry.name}`);
+      continue;
+    }
+    if (shouldSkipDirectAsset(relativePath)) {
+      console.info(`[CAS] skipped archive metadata asset "${relativePath}"`);
       continue;
     }
     entries.push({ path: relativePath, zipEntry: entry });
