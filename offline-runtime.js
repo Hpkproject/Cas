@@ -193,16 +193,38 @@ async function persistAppFilesToDisk({ appId, indexHtml, iconBlob, assetEntries,
   if (iconBlob) {
     await fs.writeFile(["CAS", "apps", appId, "icon.png"], iconBlob);
   }
+  console.info(`[CAS] writing ${assetEntries.length} app files directly to CAS storage for "${appId}"`);
   for (const [index, entry] of assetEntries.entries()) {
     const bytes = entry.zipEntry
       ? new Uint8Array(await entry.zipEntry.async("uint8array"))
       : entry.bytes;
-    await fs.writeFile(
-      ["CAS", "apps", appId, ...entry.path.split("/")],
-      new Blob([bytes], { type: guessMimeType(entry.path) })
-    );
+    const pathSegments = safeStorageSegments(entry.path);
+    if (!pathSegments) {
+      console.warn(`[CAS] skipped asset that cannot be represented in CAS storage: ${entry.path}`);
+      onProgress(index + 1, assetEntries.length || 1);
+      continue;
+    }
+    try {
+      await fs.writeFile(
+        ["CAS", "apps", appId, ...pathSegments],
+        new Blob([bytes], { type: guessMimeType(entry.path) })
+      );
+    } catch (err) {
+      console.error(`[CAS] could not write asset "${entry.path}" directly to CAS storage; continuing:`, err);
+    }
     onProgress(index + 1, assetEntries.length || 1);
   }
+}
+
+function safeStorageSegments(path) {
+  const segments = String(path).split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) return null;
+  return segments.map((segment) => {
+    let safe = segment.replace(/[\u0000-\u001f<>:"/\\|?*]/g, "_").trim();
+    if (!safe || safe === "." || safe === "..") safe = "_";
+    if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(safe)) safe = `_${safe}`;
+    return safe.replace(/[. ]+$/, "_");
+  });
 }
 
 function formatBytes(bytes) {
