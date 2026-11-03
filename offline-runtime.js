@@ -85,7 +85,7 @@ export async function ensureOfflineAppCache(app) {
  * Writes an app archive's files directly into Cache Storage during
  * installation, before the launcher ever tries to open the app.
  */
-export async function stageOfflineAppFromArchive(app, zip, iconBlob) {
+export async function stageOfflineAppFromArchive(app, zip, iconBlob, onProgress = () => {}) {
   const manifestIndex = zip.file(APP_INDEX_PATH);
   if (!manifestIndex) {
     throw new Error(`Invalid .hpk: offline app "${app.appId}" is missing index.html.`);
@@ -93,6 +93,7 @@ export async function stageOfflineAppFromArchive(app, zip, iconBlob) {
 
   const indexHtml = await manifestIndex.async("string");
   const assetEntries = await collectAssetEntriesFromZip(zip, app.appId);
+  onProgress(0, assetEntries.length || 1);
   const storageSnapshot = await loadPersistedStorage(app.appId);
   await stageOfflineAppCache({
     appId: app.appId,
@@ -100,10 +101,11 @@ export async function stageOfflineAppFromArchive(app, zip, iconBlob) {
     iconBlob,
     assetEntries,
     storageSnapshot,
+    onProgress,
   });
 }
 
-async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, storageSnapshot }) {
+async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, storageSnapshot, onProgress = () => {} }) {
   await caches.delete(appCacheName(appId));
   const cache = await caches.open(appCacheName(appId));
 
@@ -120,12 +122,13 @@ async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, 
     );
   }
 
-  for (const entry of assetEntries) {
+  for (const [index, entry] of assetEntries.entries()) {
     const urlPath = `${appUrlPrefix()}/${appId}/${entry.path}`;
     await cache.put(
       new Request(urlPath, { method: "GET" }),
       responseFromBytes(entry.bytes, guessMimeType(entry.path))
     );
+    onProgress(index + 1, assetEntries.length || 1);
   }
 }
 

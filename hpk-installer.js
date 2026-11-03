@@ -212,6 +212,78 @@ function showPopupInstallDialog(popup, { name, desc, icon }) {
   });
 }
 
+function createInstallProgress(name, size) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "cas-dialog";
+  dialog.innerHTML = `
+    <div class="cas-dialog__body">
+      <h2 class="cas-dialog__title"></h2>
+      <p class="cas-dialog__desc">Starting installation...</p>
+      <progress min="0" max="100" value="0" style="width:100%;margin-top:16px"></progress>
+      <small style="display:block;margin-top:10px;color:#999"></small>
+    </div>
+  `;
+  dialog.querySelector(".cas-dialog__title").textContent = `Installing ${name}`;
+  document.body.appendChild(dialog);
+  dialog.showModal();
+  const started = performance.now();
+  const status = dialog.querySelector(".cas-dialog__desc");
+  const bar = dialog.querySelector("progress");
+  const detail = dialog.querySelector("small");
+
+  return {
+    update(phase, percent) {
+      status.textContent = phase;
+      if (percent !== null) {
+        bar.value = percent;
+        const elapsed = (performance.now() - started) / 1000;
+        const remaining = percent > 0 ? Math.max(0, (elapsed / percent) * (100 - percent)) : null;
+        detail.textContent = remaining === null
+          ? `${formatBytes(size)} archive`
+          : `${percent}% · about ${formatDuration(remaining)} remaining`;
+      } else {
+        detail.textContent = `${formatBytes(size)} archive`;
+      }
+    },
+    done() {
+      bar.value = 100;
+      status.textContent = "Installed. Refreshing launcher...";
+      detail.textContent = "Complete";
+      window.setTimeout(() => {
+        dialog.close();
+        dialog.remove();
+      }, 700);
+    },
+    fail(err) {
+      status.textContent = "Installation failed";
+      detail.textContent = err.message;
+      dialog.querySelector(".cas-dialog__title").textContent = `Could not install ${name}`;
+      window.setTimeout(() => {
+        dialog.close();
+        dialog.remove();
+      }, 1800);
+    },
+  };
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 1024) return `${bytes} bytes`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = "bytes";
+  for (const next of units) {
+    value /= 1024;
+    unit = next;
+    if (value < 1024) break;
+  }
+  return `${value.toFixed(1)} ${unit}`;
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  return `${Math.floor(seconds / 60)}m ${Math.ceil(seconds % 60)}s`;
+}
+
 /**
  * Full install flow for one .hpk File: parse -> confirm -> write to disk.
  * Returns the installed app's registry entry, or null if the user
@@ -242,7 +314,6 @@ export async function installHpk(file, opts = {}) {
       return null;
     }
   }
-
   // Collect requested permissions: whatever the manifest declares, plus an
   // implicit "background_workers" request if it names a background worker
   // script — declaring one without the permission to run it is meaningless.
@@ -276,7 +347,22 @@ export async function installHpk(file, opts = {}) {
     });
   }
 
-  return installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updateMeta);
+  const progress = createInstallProgress(manifest.name, file.size);
+  const report = (phase, completed, total = 0) => {
+    const percent = total ? Math.min(99, Math.round((completed / total) * 100)) : null;
+    progress.update(phase, percent);
+    console.info(`[CAS] installing "${manifest.name}": ${phase}${percent === null ? "" : ` (${percent}%)`}`);
+  };
+  report("Preparing archive", 0);
+  try {
+    const result = await installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updateMeta, report);
+    progress.done();
+    console.info(`[CAS] installing "${manifest.name}": complete`);
+    return result;
+  } catch (err) {
+    progress.fail(err);
+    throw err;
+  }
 }
 
 /**
@@ -321,7 +407,7 @@ export async function importUpdatePublicKey(base64Spki) {
  * casf/CAS/apps/, copies its background worker (if any + granted) to the
  * protected casf/CAS/bws/ tree, then appends it to the app registry.
  */
-async function installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updateMeta = {}) {
+async function installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updateMeta = {}, report = () => {}) {
   const appName = sanitizeAppName(manifest.name);
   if (!appName) {
     throw new Error(`Invalid .hpk: app name "${manifest.name}" doesn't contain any usable characters (a-z, 0-9, -).`);
@@ -333,12 +419,14 @@ async function installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updat
   }
   const entryPointBlob = await entryPointEntry.async("blob");
   await fs.writeFile(["CAS", "apps", appName, "index.html"], entryPointBlob);
+  report("Writing app shell", 20, 100);
 
   if (iconBlob) {
     await fs.writeFile(["CAS", "apps", appName, "icon.png"], iconBlob);
   }
 
   await packageAssets(zip, appName);
+  report("Extracting app files", 45, 100);
 
   let hasBackgroundWorker = false;
   if (bwFile && granted.has(PERMISSIONS.BACKGROUND_WORKERS)) {
@@ -353,7 +441,13 @@ async function installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updat
     hasBackgroundWorker = true;
   }
 
-  await stageOfflineAppFromArchive({ appId: appName, name: manifest.name }, zip, iconBlob);
+  await stageOfflineAppFromArchive(
+    { appId: appName, name: manifest.name },
+    zip,
+    iconBlob,
+    (completed, total) => report("Caching app files", completed, total)
+  );
+  report("Registering app", 95, 100);
 
   return appendRegistryEntry({
     name: manifest.name,
