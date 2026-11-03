@@ -24,7 +24,6 @@ const SHELL_ASSETS = [
   "plugin-installer.js",
   "permissions.js",
   "bw-manager.js",
-  "run-on-login.js",
   "settings-app.js",
   "pending-launch.js",
   "offline-runtime.js",

@@ -20,7 +20,6 @@ import { installCasPlugin } from "./plugin-installer.js";
 import { mountLauncher } from "./launcher.js";
 import { mountShell } from "./shell.js";
 import { bootAll as bootBackgroundWorkers } from "./bw-manager.js";
-import { showRunOnLoginPrompt } from "./run-on-login.js";
 import { openSettingsApp } from "./settings-app.js";
 import {
   captureLaunches,
@@ -54,12 +53,12 @@ async function main() {
  * Renders whichever screen the current storage state allows, then works
  * through anything waiting to be installed.
  */
-async function boot() {
+async function boot({ storageReady = false } = {}) {
   const root = document.getElementById("root");
 
-  let restored = false;
+  let restored = storageReady;
   try {
-    restored = await fs.restore();
+    if (!storageReady) restored = await fs.restore();
   } catch (err) {
     // requestPermission() throws when called outside a user gesture,
     // which is exactly the case on a cold file-handler launch.
@@ -183,12 +182,11 @@ async function renderStorageGate(root) {
       if (!hasStoredRoot) {
         const handle = await fs.setupFirstRun();
         if (handle) {
-          await showRunOnLoginPrompt(); // only on a genuinely fresh setup, not a reconnect
-          await boot();
+          await boot({ storageReady: true });
           return;
         }
       } else if (await fs.restore()) {
-        await boot(); // continue in this document — no reload, no lost launch
+        await boot({ storageReady: true }); // continue in this document — no reload, no lost launch
         return;
       }
     } catch (err) {

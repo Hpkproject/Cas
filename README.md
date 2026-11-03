@@ -26,7 +26,6 @@ background workers.
 | `storage-sync.js` | Per-app storage shim + `key-values.json` read/write |
 | `service-worker.js` | Serves the shell and `/apps/[appId]/*` routes from Cache Storage and stamps COOP/COEP headers on same-origin responses |
 | `coi-serviceworker.js` | Page-context bootstrap: registers `service-worker.js`, reloads at most once, and hands any pending File Handling API launch to `pending-launch.js` first |
-| `run-on-login.js` | One-time onboarding dialog guiding the user through Chromium's real "Run on OS Login" setting (unmanaged devices) |
 | `app.js` | Entry point: storage gate, launch draining, manual/drag-and-drop installs, boots background workers, mounts the launcher/Settings |
 | `theme.css` | Dark, space-themed look: CSS-only starfield background, sidebar/dialog/launcher/settings styles. No Material 3 chrome — see "Look and feel" below |
 | `shell.js` | Persistent sidebar (brand, Home, Install, Settings) with a `<main>` content slot; `launcher.js`/`settings-app.js` render into it instead of owning the whole page |
@@ -110,21 +109,6 @@ A guest app calling `CAS.import("helloworld")` gets back a `Proxy` — not a
 promise — so `CAS.import("helloworld").alert("hi")` works directly; each
 method call is relayed to the live `helloworld` background worker and
 resolves once it responds.
-
-## Starting CAS at OS login
-
-"Run on OS Login" is a real, shipped Chromium feature (Chrome/Edge 91+) for
-installed PWAs — but it's deliberately not exposed to page JavaScript; an
-app can never enable its own auto-start. Two real paths, both used here:
-
-- **Unmanaged devices:** `run-on-login.js` shows a one-time, OS-aware dialog
-  right after first-run setup, walking the user through turning it on via
-  the browser's own app-management UI.
-- **Managed Cora OS devices:** a Cora OS image can ship Chromium's
-  `WebAppSettings` enterprise policy pre-configured with
-  `run_on_os_login: "run_windowed"` for CAS's manifest ID — see
-  `enterprise-policy/webapp-settings.sample.json`. Fully automatic, no
-  per-user step at all.
 
 ## Cross-origin isolation
 
