@@ -16,10 +16,16 @@ import { openZip } from "./zip-reader.js";
 const APP_CACHE_PREFIX = "cas-app-";
 const APP_CACHE_VERSION = "v2";
 const APP_INDEX_PATH = "index.html";
+const CACHE_WRITE_CONCURRENCY = 6;
 
 function appUrlPrefix() {
   const base = new URL("./", import.meta.url).pathname.replace(/\/$/, "");
   return `${base}/apps`;
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  return `${Math.floor(seconds / 60)}m ${Math.ceil(seconds % 60)}s`;
 }
 
 export function appCacheName(appId) {
@@ -42,6 +48,8 @@ async function clearAppCaches(appId) {
  * an iframe.
  */
 export async function launchOfflineApp(app) {
+  const started = performance.now();
+  console.info(`[CAS] launching "${app.name}": opening app window`);
   const appWindow = window.open("", `cas-app-${app.appId}`, "popup,width=1024,height=768");
   if (!appWindow) {
     throw new Error("The browser blocked the app window. Allow pop-ups for this site and try again.");
@@ -53,7 +61,9 @@ export async function launchOfflineApp(app) {
   appWindow.document.title = app.name;
 
   try {
+    console.info(`[CAS] launching "${app.name}": preparing app files`);
     await ensureOfflineAppCache(app);
+    console.info(`[CAS] launching "${app.name}": ready after ${formatDuration((performance.now() - started) / 1000)}`);
     mountPreview(appWindow, app);
     return appWindow;
   } catch (err) {
@@ -68,6 +78,13 @@ export async function launchOfflineApp(app) {
  * restored without any network dependency.
  */
 export async function ensureOfflineAppCache(app) {
+  const started = performance.now();
+  const existingCache = await caches.open(appCacheName(app.appId));
+  if (await existingCache.match(appRequest(app.appId, APP_INDEX_PATH))) {
+    console.info(`[CAS] launch load "${app.name}": reusing existing app cache`);
+    return;
+  }
+  console.info(`[CAS] launch load "${app.name}": reading shell`);
   const appDir = await fs.getDir(["CAS", "apps", app.appId]);
   const indexHtmlFile = await (await appDir.getFileHandle(APP_INDEX_PATH)).getFile();
   const indexHtml = await indexHtmlFile.text();
@@ -81,6 +98,7 @@ export async function ensureOfflineAppCache(app) {
   }
 
   const assetEntries = await readAssetEntriesFromDisk(app.appId);
+  console.info(`[CAS] launch load "${app.name}": found ${assetEntries.length} files`);
   const storageSnapshot = await loadPersistedStorage(app.appId);
   await stageOfflineAppCache({
     appId: app.appId,
@@ -88,7 +106,9 @@ export async function ensureOfflineAppCache(app) {
     iconBlob,
     assetEntries,
     storageSnapshot,
+    logLabel: app.name,
   });
+  console.info(`[CAS] launch load "${app.name}": finished in ${formatDuration((performance.now() - started) / 1000)}`);
 }
 
 /**
@@ -114,7 +134,7 @@ export async function stageOfflineAppFromArchive(app, zip, iconBlob, onProgress 
   console.info(`[CAS] installed "${app.appId}" directly into the CAS storage folder; Cache API staging deferred until launch.`);
 }
 
-async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, storageSnapshot, onProgress = () => {} }) {
+async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, storageSnapshot, onProgress = () => {}, logLabel = appId }) {
   await clearAppCaches(appId);
   if (navigator.storage?.persist) {
     try {
@@ -148,24 +168,36 @@ async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, 
       );
     }
 
-    for (const [index, entry] of assetEntries.entries()) {
-      const urlPath = `${appUrlPrefix()}/${appId}/${entry.path}`;
-      try {
-        const bytes = entry.zipEntry
-          ? new Uint8Array(await entry.zipEntry.async("uint8array"))
-          : entry.bytes;
-        await cache.put(
-          new Request(urlPath, { method: "GET" }),
-          responseFromBytes(bytes, guessMimeType(entry.path))
-        );
-      } catch (err) {
-        if (err?.name === "QuotaExceededError" || /quota exceeded/i.test(String(err?.message))) {
-          throw err;
+    let cursor = 0;
+    let completed = 0;
+    const writeWorker = async () => {
+      while (cursor < assetEntries.length) {
+        const index = cursor++;
+        const entry = assetEntries[index];
+        const urlPath = `${appUrlPrefix()}/${appId}/${entry.path}`;
+        try {
+          const bytes = await readAssetBytes(entry);
+          await cache.put(
+            new Request(urlPath, { method: "GET" }),
+            responseFromBytes(bytes, guessMimeType(entry.path))
+          );
+        } catch (err) {
+          if (err?.name === "QuotaExceededError" || /quota exceeded/i.test(String(err?.message))) throw err;
+          console.error(`[CAS] skipped unreadable asset "${entry.path}"; continuing launch:`, err);
         }
-        console.error(`[CAS] skipped unreadable asset "${entry.path}"; continuing installation:`, err);
+        completed += 1;
+        onProgress(completed, assetEntries.length || 1);
+        if (completed === 1 || completed % 25 === 0 || completed === assetEntries.length) {
+          console.info(`[CAS] launch load "${logLabel}": cached ${completed}/${assetEntries.length} files`);
+        }
       }
-      onProgress(index + 1, assetEntries.length || 1);
-    }
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.min(CACHE_WRITE_CONCURRENCY, assetEntries.length) },
+        () => writeWorker()
+      )
+    );
   } catch (err) {
     await caches.delete(appCacheName(appId));
     if (err?.name === "QuotaExceededError" || /quota exceeded/i.test(String(err?.message))) {
@@ -213,9 +245,7 @@ async function persistAppFilesToDisk({ appId, indexHtml, iconBlob, assetEntries,
       continue;
     }
     try {
-      const bytes = entry.zipEntry
-        ? new Uint8Array(await entry.zipEntry.async("uint8array"))
-        : entry.bytes;
+      const bytes = await readAssetBytes(entry);
       await fs.writeFile(
         ["CAS", "apps", appId, ...pathSegments],
         new Blob([bytes], { type: guessMimeType(entry.path) })
@@ -225,6 +255,12 @@ async function persistAppFilesToDisk({ appId, indexHtml, iconBlob, assetEntries,
     }
     onProgress(index + 1, assetEntries.length || 1);
   }
+}
+
+async function readAssetBytes(entry) {
+  if (entry.zipEntry) return new Uint8Array(await entry.zipEntry.async("uint8array"));
+  if (entry.fileHandle) return new Uint8Array(await (await entry.fileHandle.getFile()).arrayBuffer());
+  return entry.bytes;
 }
 
 function shouldSkipDirectAsset(path) {
@@ -348,14 +384,14 @@ async function collectAssetFilesFromDirectory(directory, prefix, excluded = new 
   for await (const handle of directory.values()) {
     const path = prefix ? `${prefix}/${handle.name}` : handle.name;
     if (excluded.has(path)) continue;
+    if (shouldSkipDirectAsset(path)) continue;
     if (handle.kind === "directory") {
       entries.push(...await collectAssetFilesFromDirectory(handle, path, excluded));
       continue;
     }
-    const file = await handle.getFile();
     entries.push({
       path,
-      bytes: new Uint8Array(await file.arrayBuffer()),
+      fileHandle: handle,
     });
   }
   return entries;
