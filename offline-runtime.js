@@ -302,14 +302,46 @@ function injectAppShell(indexHtml, appId, storageSnapshot) {
   const faviconTag = `<link rel="icon" type="image/png" href="${appUrlPrefix()}/${appId}/icon.png">`;
   const storageScript = buildStorageSyncScript(storageSnapshot);
   const casScript = `<script>${CAS_PERMS_CLIENT_SRC}</script>`;
+  const appNavigationScript = buildAppNavigationScript(appId);
 
-  const headSnippets = `${faviconTag}\n${storageScript}\n${casScript}`;
+  const headSnippets = `${faviconTag}\n${storageScript}\n${casScript}\n${appNavigationScript}`;
   let html = rewriteAssetUrls(indexHtml, appId);
   html = html.includes("</head>")
     ? html.replace("</head>", `  ${headSnippets}\n</head>`)
     : `${headSnippets}\n${html}`;
 
   return html;
+}
+
+function buildAppNavigationScript(appId) {
+  const appBase = `${appUrlPrefix()}/${appId}/`;
+  const baseJson = JSON.stringify(appBase);
+  return `<script>
+(function () {
+  var appBase = ${baseJson};
+  var originalOpen = window.open;
+  window.open = function (url, target, features) {
+    if (typeof url === "string" && !/^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(url)) {
+      try { url = new URL(url, appBase).href; } catch (_) {}
+    }
+    return originalOpen.call(window, url, target, features);
+  };
+  document.addEventListener("click", function (event) {
+    var link = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+    if (!link) return;
+    var href = link.getAttribute("href");
+    if (!href || /^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(href)) return;
+    if (link.target === "_blank" || link.target === "_new") {
+      try {
+        link.setAttribute("href", new URL(href, appBase).href);
+      } catch (_) {}
+    } else if (href.charAt(0) === "/" && href.indexOf(appBase) !== 0 &&
+               href.indexOf("${appUrlPrefix()}/") !== 0) {
+      link.setAttribute("href", appBase + href.slice(1));
+    }
+  }, true);
+}());
+</script>`;
 }
 
 function rewriteAssetUrls(html, appId) {
