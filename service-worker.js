@@ -8,7 +8,7 @@
  * -----------------------------------------------------------------------
  */
 
-const SHELL_CACHE_NAME = "cas-shell-v2";
+const SHELL_CACHE_NAME = "cas-shell-v3";
 const APP_CACHE_PREFIX = "cas-app-";
 const APP_CACHE_VERSION = "v2";
 const BASE_PATH = new URL("./", self.location.href).pathname.replace(/\/$/, "");
@@ -27,6 +27,7 @@ const SHELL_ASSETS = [
   "settings-app.js",
   "pending-launch.js",
   "offline-runtime.js",
+  "zip-reader.js",
   "cas-perms-client.js",
   "cas-perms-bridge.js",
   "storage-sync.js",
@@ -111,18 +112,21 @@ async function resolveAppRequest(request, clientId) {
     };
   }
 
-  if (!clientId) return null;
-  const client = await self.clients.get(clientId);
-  if (!client) return null;
-
-  const clientApp = parseAppPath(new URL(client.url).pathname);
+  let clientApp = null;
+  if (clientId) {
+    const client = await self.clients.get(clientId);
+    if (client) clientApp = parseAppPath(new URL(client.url).pathname);
+  }
+  if (!clientApp && request.referrer) {
+    clientApp = parseAppPath(new URL(request.referrer).pathname);
+  }
   if (!clientApp) return null;
 
-  if (!shouldTreatAsAppRequest(url.pathname)) return null;
+  if (url.pathname.startsWith(`${BASE_PATH}/service-worker.js`)) return null;
 
   return {
     appId: clientApp.appId,
-    canonicalRequest: new Request(appRequestUrl(clientApp.appId, normalizeAppRelativePath(url.pathname) + url.search), {
+    canonicalRequest: new Request(appRequestUrl(clientApp.appId, appRelativePath(url.pathname) + url.search), {
       method: "GET",
     }),
   };
@@ -150,6 +154,13 @@ function shouldTreatAsAppRequest(pathname) {
 function normalizeAppRelativePath(pathname) {
   if (!pathname || pathname === "/") return "index.html";
   return pathname.replace(/^\/+/, "");
+}
+
+function appRelativePath(pathname) {
+  const withoutBase = pathname.startsWith(BASE_PATH)
+    ? pathname.slice(BASE_PATH.length)
+    : pathname;
+  return normalizeAppRelativePath(withoutBase);
 }
 
 function appRequestUrl(appId, relativePath) {

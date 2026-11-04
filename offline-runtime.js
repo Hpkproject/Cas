@@ -278,9 +278,18 @@ function injectAppShell(indexHtml, appId, storageSnapshot) {
 
 function rewriteAssetUrls(html, appId) {
   const appBase = `${appUrlPrefix()}/${appId}/`;
+  const rootPrefix = appBase.slice(0, appBase.indexOf("/apps/"));
   return String(html)
-    .replace(/(["'(])\/(?!\/)/g, `$1${appBase}`)
-    .replace(/url\(\s*\/(?!\/)/g, `url(${appBase}`);
+    .replace(/(["'(])\/(?!\/)/g, (match, prefix, offset, source) => {
+      const rest = source.slice(offset + match.length);
+      if (rest.startsWith(appBase.slice(1)) || rest.startsWith(rootPrefix.slice(1))) return match;
+      return `${prefix}${appBase}`;
+    })
+    .replace(/url\(\s*\/(?!\/)/g, (match, offset, source) => {
+      const rest = source.slice(offset + match.length);
+      if (rest.startsWith(appBase.slice(1)) || rest.startsWith(rootPrefix.slice(1))) return match;
+      return `url(${appBase}`;
+    });
 }
 
 function mountPreview(appWindow, app) {
