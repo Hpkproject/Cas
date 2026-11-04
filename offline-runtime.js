@@ -14,7 +14,7 @@ import { attachBridge } from "./cas-perms-bridge.js";
 import { openZip } from "./zip-reader.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v2";
+const APP_CACHE_VERSION = "v3";
 const APP_INDEX_PATH = "index.html";
 const CACHE_WRITE_CONCURRENCY = 6;
 
@@ -299,12 +299,13 @@ function formatBytes(bytes) {
 }
 
 function injectAppShell(indexHtml, appId, storageSnapshot) {
+  const baseTag = `<base href="${appUrlPrefix()}/${appId}/">`;
   const faviconTag = `<link rel="icon" type="image/png" href="${appUrlPrefix()}/${appId}/icon.png">`;
   const storageScript = buildStorageSyncScript(storageSnapshot);
   const casScript = `<script>${CAS_PERMS_CLIENT_SRC}</script>`;
   const appNavigationScript = buildAppNavigationScript(appId);
 
-  const headSnippets = `${faviconTag}\n${storageScript}\n${casScript}\n${appNavigationScript}`;
+  const headSnippets = `${baseTag}\n${faviconTag}\n${storageScript}\n${casScript}\n${appNavigationScript}`;
   let html = rewriteAssetUrls(indexHtml, appId);
   html = html.includes("</head>")
     ? html.replace("</head>", `  ${headSnippets}\n</head>`)
@@ -332,9 +333,9 @@ function buildAppNavigationScript(appId) {
     var href = link.getAttribute("href");
     if (!href || /^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(href)) return;
     if (link.target === "_blank" || link.target === "_new") {
-      try {
-        link.setAttribute("href", new URL(href, appBase).href);
-      } catch (_) {}
+      event.preventDefault();
+      var destination = new URL(href, appBase).href;
+      originalOpen.call(window, destination, link.target, "noopener,noreferrer");
     } else if (href.charAt(0) === "/" && href.indexOf(appBase) !== 0 &&
                href.indexOf("${appUrlPrefix()}/") !== 0) {
       link.setAttribute("href", appBase + href.slice(1));
