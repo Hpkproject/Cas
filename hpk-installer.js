@@ -471,44 +471,7 @@ async function installOfflineApp(manifest, zip, iconBlob, granted, bwFile, updat
  * the assets/ subtree (zip slip: "assets/../../evil.js") are dropped.
  */
 async function packageAssets(zip, appName) {
-  if (!zip.generateAsync) {
-    // The native reader is already consumed directly into Cache Storage by
-    // stageOfflineAppFromArchive(). Avoid rebuilding assets.zip here: that
-    // would needlessly write archive-controlled nested names to disk.
-    console.info(`[CAS] native unzipper staged assets for "${appName}"; skipped assets.zip packaging.`);
-    return;
-  }
-  const JSZip = await loadJSZip();
-  const assetsZip = new JSZip();
-
-  const assetEntries = zip.folder("assets") ? zip.filter((path) => path.startsWith("assets/")) : [];
-
-  if (assetEntries.length === 0) {
-    return; // App shipped no assets/ directory — nothing to package.
-  }
-  if (assetEntries.length > MAX_ASSET_ENTRIES) {
-    throw new Error(`Invalid .hpk: too many files under assets/ (${assetEntries.length}).`);
-  }
-
-  for (const entry of assetEntries) {
-    if (entry.dir) continue;
-    const relativePath = sanitizeRelativePath(entry.name.slice("assets/".length));
-    if (relativePath === null) {
-      console.warn(`[CAS] skipped unsafe asset path in "${appName}": ${entry.name}`);
-      continue;
-    }
-    const content = await entry.async("blob");
-    if (content.size > MAX_ASSET_ENTRY_BYTES) {
-      throw new Error(`Invalid .hpk: asset "${entry.name}" exceeds the per-file size limit.`);
-    }
-    assetsZip.file(relativePath, content);
-  }
-
-  const packagedBlob = await assetsZip.generateAsync({ type: "blob" });
-  await fs.writeFile(
-    ["CAS", "apps", "assets", appName, "assets.zip"],
-    packagedBlob
-  );
+  console.info(`[CAS] direct filesystem install enabled for "${appName}"; skipping assets.zip creation.`);
 }
 
 /** Same zip-slip guard used when re-extracting assets.zip later — see offline-runtime.js. */

@@ -92,8 +92,8 @@ export async function ensureOfflineAppCache(app) {
 }
 
 /**
- * Writes an app archive's files directly into Cache Storage during
- * installation, before the launcher ever tries to open the app.
+ * Writes an app archive's files directly into the selected CAS folder.
+ * Cache API staging is deferred until the app is launched.
  */
 export async function stageOfflineAppFromArchive(app, zip, iconBlob, onProgress = () => {}) {
   const manifestIndex = zip.file(APP_INDEX_PATH);
@@ -104,15 +104,14 @@ export async function stageOfflineAppFromArchive(app, zip, iconBlob, onProgress 
   const indexHtml = await manifestIndex.async("string");
   const assetEntries = collectAssetEntriesFromZip(zip, app.appId);
   onProgress(0, assetEntries.length || 1);
-  const storageSnapshot = await loadPersistedStorage(app.appId);
-  await stageOfflineAppCache({
+  await persistAppFilesToDisk({
     appId: app.appId,
     indexHtml,
     iconBlob,
     assetEntries,
-    storageSnapshot,
     onProgress,
   });
+  console.info(`[CAS] installed "${app.appId}" directly into the CAS storage folder; Cache API staging deferred until launch.`);
 }
 
 async function stageOfflineAppCache({ appId, indexHtml, iconBlob, assetEntries, storageSnapshot, onProgress = () => {} }) {
@@ -269,11 +268,19 @@ function injectAppShell(indexHtml, appId, storageSnapshot) {
   const casScript = `<script>${CAS_PERMS_CLIENT_SRC}</script>`;
 
   const headSnippets = `${faviconTag}\n${storageScript}\n${casScript}`;
-  let html = indexHtml.includes("</head>")
-    ? indexHtml.replace("</head>", `  ${headSnippets}\n</head>`)
-    : `${headSnippets}\n${indexHtml}`;
+  let html = rewriteAssetUrls(indexHtml, appId);
+  html = html.includes("</head>")
+    ? html.replace("</head>", `  ${headSnippets}\n</head>`)
+    : `${headSnippets}\n${html}`;
 
   return html;
+}
+
+function rewriteAssetUrls(html, appId) {
+  const appBase = `${appUrlPrefix()}/${appId}/`;
+  return String(html)
+    .replace(/(["'(])\/(?!\/)/g, `$1${appBase}`)
+    .replace(/url\(\s*\/(?!\/)/g, `url(${appBase}`);
 }
 
 function mountPreview(appWindow, app) {
@@ -308,6 +315,14 @@ function mountPreview(appWindow, app) {
 }
 
 async function readAssetEntriesFromDisk(appId) {
+  const appDir = await fs.getDir(["CAS", "apps", appId]);
+  const directEntries = await collectAssetFilesFromDirectory(
+    appDir,
+    "",
+    new Set(["index.html", "icon.png"])
+  );
+  if (directEntries.length > 0) return directEntries;
+
   const assetsDir = await fs.getDir(["CAS", "apps", "assets", appId]);
   try {
     const zipHandle = await assetsDir.getFileHandle("assets.zip");
@@ -315,8 +330,7 @@ async function readAssetEntriesFromDisk(appId) {
     const zip = await openZip(zipFile);
     return collectAssetEntriesFromZip(zip, appId);
   } catch {
-    const appDir = await fs.getDir(["CAS", "apps", appId]);
-    return collectAssetFilesFromDirectory(appDir, "", new Set(["index.html", "icon.png"]));
+    return [];
   }
 }
 
@@ -349,7 +363,7 @@ function collectAssetEntriesFromZip(zip, appId) {
     let rawPath = null;
     if (hasAssetsPrefix) {
       if (entry.name.startsWith("assets/")) {
-        rawPath = entry.name.slice("assets/".length);
+        rawPath = entry.name;
       } else if (!looksLikeHpk) {
         rawPath = entry.name;
       }
