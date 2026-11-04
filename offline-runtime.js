@@ -320,35 +320,34 @@ function buildAppNavigationScript(appId) {
   return `<script>
 (function () {
   var appBase = ${baseJson};
-  function bootstrapUrl(url) {
+  function openAppRoute(url, target, features) {
     var destination = new URL(url, appBase);
-    var routePath = destination.pathname.indexOf(appBase) === 0
-      ? destination.pathname.slice(appBase.length) + destination.search + destination.hash
-      : destination.href;
-    return destination.origin + appBase + "index.html?cas-route=" + encodeURIComponent(routePath);
-  }
-  var route = new URLSearchParams(location.search).get("cas-route");
-  if (route) {
-    (async function () {
-      try {
-        var target = new URL(route, appBase);
-        var response = await fetch(target.href);
-        if (!response.ok) throw new Error("HTTP " + response.status);
-        var markup = await response.text();
-        history.replaceState(null, "", target.href);
-        document.open();
-        document.write(markup);
-        document.close();
-      } catch (error) {
-        console.error("[CAS] could not open app route", route, error);
-      }
-    }());
-    return;
+    var child = originalOpen.call(window, "", target || "_blank", features || "popup");
+    if (!child) return child;
+    child.document.open();
+    child.document.write("<!doctype html><title>Loading app…</title><p>Loading…</p>");
+    child.document.close();
+    fetch(destination.href).then(function (response) {
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.text();
+    }).then(function (markup) {
+      var base = "<base href=\"" + appBase.replace(/"/g, "&quot;") + "\">";
+      child.document.open();
+      child.document.write(markup.replace(/<head(\s[^>]*)?>/i, function (head) {
+        return head + base;
+      }));
+      child.document.close();
+      child.focus();
+    }).catch(function (error) {
+      console.error("[CAS] could not open app route", destination.href, error);
+      child.document.body.textContent = "Could not load app page.";
+    });
+    return child;
   }
   var originalOpen = window.open;
   window.open = function (url, target, features) {
     if (typeof url === "string" && !/^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(url)) {
-      try { url = bootstrapUrl(url); } catch (_) {}
+      try { return openAppRoute(url, target, features); } catch (_) {}
     }
     return originalOpen.call(window, url, target, features);
   };
@@ -359,8 +358,7 @@ function buildAppNavigationScript(appId) {
     if (!href || /^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(href)) return;
     if (link.target === "_blank" || link.target === "_new") {
       event.preventDefault();
-      var bootstrap = bootstrapUrl(href);
-      originalOpen.call(window, bootstrap, link.target, "noopener,noreferrer");
+      openAppRoute(href, link.target, "popup");
     } else if (href.charAt(0) === "/" && href.indexOf(appBase) !== 0 &&
                href.indexOf("${appUrlPrefix()}/") !== 0) {
       link.setAttribute("href", appBase + href.slice(1));
