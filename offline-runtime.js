@@ -14,7 +14,7 @@ import { attachBridge } from "./cas-perms-bridge.js";
 import { openZip } from "./zip-reader.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v5";
+const APP_CACHE_VERSION = "v6";
 const APP_INDEX_PATH = "index.html";
 const CACHE_WRITE_CONCURRENCY = 6;
 
@@ -345,6 +345,28 @@ function buildAppNavigationScript(appId) {
     return child;
   }
   var originalOpen = window.open;
+  function appRouteUrl(href) {
+    var destination = new URL(href, appBase);
+    if (destination.origin === location.origin &&
+        destination.pathname.indexOf(appBase) === 0 &&
+        /\/[^/.]+$/.test(destination.pathname)) {
+      destination.pathname = destination.pathname.replace(/\/?$/, "/index.html");
+    }
+    return destination.href;
+  }
+  function normalizeTargetLinks() {
+    document.querySelectorAll("a[target='_blank'],a[target='_new']").forEach(function (link) {
+      var href = link.getAttribute("href");
+      if (!href || /^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(href)) return;
+      try { link.href = appRouteUrl(href); } catch (_) {}
+    });
+  }
+  new MutationObserver(normalizeTargetLinks).observe(document.documentElement, { childList: true, subtree: true });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", normalizeTargetLinks, { once: true });
+  } else {
+    normalizeTargetLinks();
+  }
   window.open = function (url, target, features) {
     if (typeof url === "string" && !/^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(url)) {
       try { return openAppRoute(url, target, features); } catch (_) {}
@@ -358,7 +380,7 @@ function buildAppNavigationScript(appId) {
     if (!href || /^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(href)) return;
     if (link.target === "_blank" || link.target === "_new") {
       event.preventDefault();
-      openAppRoute(href, link.target, "popup");
+      openAppRoute(appRouteUrl(href), link.target, "popup");
     } else if (href.charAt(0) === "/" && href.indexOf(appBase) !== 0 &&
                href.indexOf("${appUrlPrefix()}/") !== 0) {
       link.setAttribute("href", appBase + href.slice(1));
