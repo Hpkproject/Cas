@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Must load first, as a plain classic script: establishes cross-origin
+       isolation before any app preview or launcher logic runs. -->
+  <script src="./coi-serviceworker.js"></script>
+  <title>CAS — Cora App Services</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" href="./icons/CAS-192.png" />
+  <link rel="stylesheet" href="./theme.css" />
+</head>
+<body>
+  <div id="cas-boot-screen" aria-live="polite">
+    <div class="cas-boot-orbit" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <img src="./icons/CAS-96.png" alt="" />
+    </div>
+    <p class="cas-boot-kicker">CORA APP SERVICES</p>
+    <h1>Waking the constellation</h1>
+    <p class="cas-boot-status">Preparing your offline workspace<span class="cas-boot-dots">...</span></p>
+  </div>
+  <div id="root"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
