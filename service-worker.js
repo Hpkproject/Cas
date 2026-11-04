@@ -10,7 +10,7 @@
 
 const SHELL_CACHE_NAME = "cas-shell-v3";
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v4";
+const APP_CACHE_VERSION = "v5";
 const BASE_PATH = new URL("./", self.location.href).pathname.replace(/\/$/, "");
 const SHELL_URL = `${BASE_PATH}/index.html`;
 const APP_URL_PREFIX = `${BASE_PATH}/apps`;
@@ -95,7 +95,13 @@ async function maybeAppResponse(request, clientId) {
 
   const cache = await caches.open(appCacheName(resolved.appId));
   const cached = await cache.match(resolved.canonicalRequest, { ignoreSearch: true });
-  const response = cached || (await cache.match(appRequestUrl(resolved.appId, "index.html"), { ignoreSearch: true }));
+  const directoryIndex = resolved.relativePath.endsWith("/")
+    ? `${resolved.relativePath}index.html`
+    : `${resolved.relativePath}/index.html`;
+  const indexed = cached
+    ? null
+    : await cache.match(appRequestUrl(resolved.appId, directoryIndex), { ignoreSearch: true });
+  const response = cached || indexed;
   if (!response) {
     return new Response("App asset not found.", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
@@ -108,6 +114,7 @@ async function resolveAppRequest(request, clientId) {
   if (direct) {
     return {
       appId: direct.appId,
+      relativePath: direct.relativePath,
       canonicalRequest: new Request(appRequestUrl(direct.appId, direct.relativePath + url.search), { method: "GET" }),
     };
   }
@@ -126,6 +133,7 @@ async function resolveAppRequest(request, clientId) {
 
   return {
     appId: clientApp.appId,
+    relativePath: appRelativePath(url.pathname),
     canonicalRequest: new Request(appRequestUrl(clientApp.appId, appRelativePath(url.pathname) + url.search), {
       method: "GET",
     }),

@@ -14,7 +14,7 @@ import { attachBridge } from "./cas-perms-bridge.js";
 import { openZip } from "./zip-reader.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v4";
+const APP_CACHE_VERSION = "v5";
 const APP_INDEX_PATH = "index.html";
 const CACHE_WRITE_CONCURRENCY = 6;
 
