@@ -14,7 +14,7 @@ import { attachBridge } from "./cas-perms-bridge.js";
 import { openZip } from "./zip-reader.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v3";
+const APP_CACHE_VERSION = "v4";
 const APP_INDEX_PATH = "index.html";
 const CACHE_WRITE_CONCURRENCY = 6;
 
@@ -320,10 +320,35 @@ function buildAppNavigationScript(appId) {
   return `<script>
 (function () {
   var appBase = ${baseJson};
+  function bootstrapUrl(url) {
+    var destination = new URL(url, appBase);
+    var routePath = destination.pathname.indexOf(appBase) === 0
+      ? destination.pathname.slice(appBase.length) + destination.search + destination.hash
+      : destination.href;
+    return destination.origin + appBase + "index.html?cas-route=" + encodeURIComponent(routePath);
+  }
+  var route = new URLSearchParams(location.search).get("cas-route");
+  if (route) {
+    (async function () {
+      try {
+        var target = new URL(route, appBase);
+        var response = await fetch(target.href);
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        var markup = await response.text();
+        history.replaceState(null, "", target.href);
+        document.open();
+        document.write(markup);
+        document.close();
+      } catch (error) {
+        console.error("[CAS] could not open app route", route, error);
+      }
+    }());
+    return;
+  }
   var originalOpen = window.open;
   window.open = function (url, target, features) {
     if (typeof url === "string" && !/^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(url)) {
-      try { url = new URL(url, appBase).href; } catch (_) {}
+      try { url = bootstrapUrl(url); } catch (_) {}
     }
     return originalOpen.call(window, url, target, features);
   };
@@ -334,8 +359,8 @@ function buildAppNavigationScript(appId) {
     if (!href || /^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(href)) return;
     if (link.target === "_blank" || link.target === "_new") {
       event.preventDefault();
-      var destination = new URL(href, appBase).href;
-      originalOpen.call(window, destination, link.target, "noopener,noreferrer");
+      var bootstrap = bootstrapUrl(href);
+      originalOpen.call(window, bootstrap, link.target, "noopener,noreferrer");
     } else if (href.charAt(0) === "/" && href.indexOf(appBase) !== 0 &&
                href.indexOf("${appUrlPrefix()}/") !== 0) {
       link.setAttribute("href", appBase + href.slice(1));
