@@ -31,6 +31,9 @@
   const RELOAD_FLAG = "cas-coi-reloaded";
 
   if (!("serviceWorker" in navigator)) return;
+  // The Store's hidden same-origin manager iframe only transports install
+  // requests; it does not render an app preview and does not need COI.
+  if (new URLSearchParams(window.location.search).get("mode") === "appmgr") return;
   if (window.crossOriginIsolated) return; // already isolated — nothing to do
 
   navigator.serviceWorker

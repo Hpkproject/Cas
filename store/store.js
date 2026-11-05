@@ -8,15 +8,27 @@ let managerReady = false;
 let managerQueue = [];
 
 window.addEventListener("message", (event) => {
-  if (event.origin !== location.origin) return;
+  if (event.origin !== location.origin || event.source !== manager.contentWindow) return;
   if (event.data?.type === "cas:appmgr-ready") {
     managerReady = true;
     managerQueue.splice(0).forEach((message) => manager.contentWindow.postMessage(message, location.origin));
   }
+  if (event.data?.type === "cas:appmgr-result") {
+    const button = document.querySelector(`[data-request-id="${CSS.escape(event.data.requestId || "")}"]`);
+    if (button) {
+      button.disabled = false;
+      button.textContent = event.data.ok ? "Installed" : "Install failed";
+      if (!event.data.ok) console.error("[CAS Store] CAS installation failed:", event.data.error);
+    }
+  }
 });
 
 function installFromCas(app) {
-  const message = { type: "cas:appmgr-install", url: app.hpk, filename: `${app.id || "app"}.hpk` };
+  if (!app?.hpk) return;
+  const requestId = `${app.id || "app"}-${Date.now()}`;
+  const button = document.querySelector(`[data-app="${CSS.escape(app.id || "")}"]`);
+  button?.setAttribute("data-request-id", requestId);
+  const message = { type: "cas:appmgr-install", requestId, url: app.hpk, filename: `${app.id || "app"}.hpk` };
   if (managerReady) manager.contentWindow.postMessage(message, location.origin);
   else managerQueue.push(message);
 }

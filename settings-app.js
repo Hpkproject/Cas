@@ -72,7 +72,7 @@ async function renderAppsSection(root) {
     <div class="cas-settings">
       <section class="cas-settings__section">
         <h1 class="cas-settings__title">Apps</h1>
-        <p class="cas-gate__note">Hold an app to rearrange it. Drag apps to change their launcher order.</p>
+        <p class="cas-gate__note">Manage installed apps here. Reorder them from the main launcher.</p>
         <div class="cas-settings-app-grid" id="cas-settings-app-grid"></div>
       </section>
     </div>`;
@@ -84,7 +84,6 @@ async function renderAppsSection(root) {
   apps.forEach((app) => {
     const card = root.ownerDocument.createElement("article");
     card.className = "cas-settings-app-card";
-    card.draggable = true;
     card.dataset.appKey = app.appId ?? app.name;
     card.innerHTML = `<strong>${escapeHtml(app.name)}</strong><small>${escapeHtml(app.type)}</small><button class="cas-btn cas-btn--danger">Uninstall</button>`;
     card.querySelector("button").addEventListener("click", async () => {
@@ -94,32 +93,6 @@ async function renderAppsSection(root) {
     });
     grid.append(card);
   });
-  let dragged = null;
-  grid.addEventListener("dragstart", (event) => {
-    dragged = event.target.closest(".cas-settings-app-card");
-    dragged?.classList.add("is-dragging");
-  });
-  grid.addEventListener("dragend", async () => {
-    dragged?.classList.remove("is-dragging");
-    dragged = null;
-    await saveAppOrder([...grid.children].map((card) => card.dataset.appKey));
-  });
-  grid.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    const target = event.target.closest(".cas-settings-app-card");
-    if (dragged && target && target !== dragged) {
-      const rect = target.getBoundingClientRect();
-      grid.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
-    }
-  });
-}
-
-async function saveAppOrder(order) {
-  const raw = await fs.readText(["CAS", "apps", "index.json"]);
-  const apps = raw ? JSON.parse(raw) : [];
-  const rank = new Map(order.map((key, index) => [key, index]));
-  apps.sort((a, b) => (rank.get(a.appId ?? a.name) ?? 99999) - (rank.get(b.appId ?? b.name) ?? 99999));
-  await fs.writeFile(["CAS", "apps", "index.json"], JSON.stringify(apps, null, 2));
 }
 
 async function renderPermissionsSection(root) {

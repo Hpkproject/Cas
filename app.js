@@ -53,10 +53,14 @@ async function main() {
 function wireAppManagerBridge() {
   if (new URLSearchParams(location.search).get("mode") !== "appmgr") return;
   window.addEventListener("message", async (event) => {
-    if (event.origin !== location.origin || event.source === window) return;
+    if (event.origin !== location.origin || event.source !== window.parent) return;
     const message = event.data;
     if (!message || message.type !== "cas:appmgr-install" || typeof message.url !== "string") return;
-    const respond = (payload) => event.source.postMessage({ type: "cas:appmgr-result", ...payload }, event.origin);
+    const respond = (payload) => event.source.postMessage({
+      type: "cas:appmgr-result",
+      requestId: message.requestId,
+      ...payload,
+    }, event.origin);
     try {
       const response = await fetch(new URL(message.url, location.href), { credentials: "same-origin" });
       if (!response.ok) throw new Error(`HPK request failed (${response.status}).`);
@@ -64,7 +68,6 @@ function wireAppManagerBridge() {
       const file = new File([blob], message.filename || "store-app.hpk", { type: "application/octet-stream" });
       const installed = await installHpk(file);
       respond({ ok: Boolean(installed), app: installed ?? null });
-      if (installed) window.opener?.postMessage({ type: "cas:appmgr-installed", app: installed }, event.origin);
     } catch (error) {
       console.error("[CAS] Store installation failed:", error);
       respond({ ok: false, error: String(error?.message ?? error) });

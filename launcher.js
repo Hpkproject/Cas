@@ -35,6 +35,7 @@ export async function mountLauncher(container) {
   const emptyState = container.querySelector(".cas-empty");
 
   let apps = [];
+  let dragged = null;
 
   async function refresh() {
     apps = await loadRegistry();
@@ -47,11 +48,11 @@ export async function mountLauncher(container) {
 
     grid.innerHTML = "";
     emptyState.hidden = list.length !== 0;
-
     for (const app of filtered) {
       const btn = document.createElement("button");
       btn.className = "cas-app";
       btn.setAttribute("role", "listitem");
+      btn.draggable = !q;
       btn.dataset.appKey = app.appId ?? app.name;
 
       const icon = document.createElement("img");
@@ -71,12 +72,41 @@ export async function mountLauncher(container) {
         if (src) icon.src = src;
       });
     }
+
   }
+
+  grid.addEventListener("dragstart", (event) => {
+    dragged = event.target.closest(".cas-app");
+    if (!dragged?.draggable) return;
+    dragged.classList.add("is-dragging");
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  });
+  grid.addEventListener("dragend", async () => {
+    if (!dragged) return;
+    dragged.classList.remove("is-dragging");
+    dragged = null;
+    await saveAppOrder([...grid.children].map((card) => card.dataset.appKey));
+  });
+  grid.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    const target = event.target.closest(".cas-app");
+    if (!dragged || !target || target === dragged) return;
+    const rect = target.getBoundingClientRect();
+    grid.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+  });
 
   searchInput.addEventListener("input", () => renderGrid(apps, searchInput.value));
 
   await refresh();
   return { refresh };
+}
+
+async function saveAppOrder(order) {
+  const raw = await fs.readText(["CAS", "apps", "index.json"]);
+  const registry = raw ? JSON.parse(raw) : [];
+  const rank = new Map(order.map((key, index) => [key, index]));
+  registry.sort((a, b) => (rank.get(a.appId ?? a.name) ?? 99999) - (rank.get(b.appId ?? b.name) ?? 99999));
+  await fs.writeFile(["CAS", "apps", "index.json"], JSON.stringify(registry, null, 2));
 }
 
 /** Reads and parses casf/CAS/apps/index.json, defaulting to an empty list. */

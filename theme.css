@@ -577,6 +577,12 @@ html, body {
   outline: none;
 }
 
+.cas-app.is-dragging {
+  opacity: .55;
+  transform: scale(1.06) rotate(2deg);
+  cursor: grabbing;
+}
+
 .cas-app__icon {
   width: 56px;
   height: 56px;
@@ -710,13 +716,6 @@ body.cas-dropping .cas-main {
   background: var(--cas-surface, #201c26);
   cursor: grab;
   transition: transform .18s ease, box-shadow .18s ease;
-}
-
-.cas-settings-app-card:active,
-.cas-settings-app-card.is-dragging {
-  cursor: grabbing;
-  transform: scale(1.05) rotate(1deg);
-  box-shadow: 0 16px 32px rgb(0 0 0 / 35%);
 }
 
 .cas-permission-picker {
