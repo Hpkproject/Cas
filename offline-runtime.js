@@ -14,7 +14,7 @@ import { attachBridge } from "./cas-perms-bridge.js";
 import { openZip } from "./zip-reader.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v8";
+const APP_CACHE_VERSION = "v9";
 const APP_INDEX_PATH = "index.html";
 const CACHE_WRITE_CONCURRENCY = 6;
 
@@ -349,6 +349,7 @@ function buildAppNavigationScript(appId) {
   var originalOpen = window.open;
   function normalizeAppRoute(href) {
     var destination = new URL(href, appBase);
+    var before = destination.href;
     if (destination.origin === location.origin &&
         destination.pathname.indexOf(appPath) !== 0 &&
         destination.pathname.indexOf(casPath) === 0) {
@@ -361,6 +362,9 @@ function buildAppNavigationScript(appId) {
       } else if (!/\.[^/]+$/.test(destination.pathname)) {
         destination.pathname += "/index.html";
       }
+    }
+    if (destination.href !== before) {
+      console.info("[CAS] app route normalized:", before, "->", destination.href);
     }
     return destination.href;
   }

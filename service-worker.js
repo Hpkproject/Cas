@@ -10,7 +10,7 @@
 
 const SHELL_CACHE_NAME = "cas-shell-v3";
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v8";
+const APP_CACHE_VERSION = "v9";
 const BASE_PATH = new URL("./", self.location.href).pathname.replace(/\/$/, "");
 const SHELL_URL = `${BASE_PATH}/index.html`;
 const APP_URL_PREFIX = `${BASE_PATH}/apps`;
@@ -95,15 +95,25 @@ async function maybeAppResponse(request, clientId) {
 
   const cache = await caches.open(appCacheName(resolved.appId));
   const cached = await cache.match(resolved.canonicalRequest, { ignoreSearch: true });
-  const directoryIndex = resolved.relativePath.endsWith("/")
-    ? `${resolved.relativePath}index.html`
-    : `${resolved.relativePath}/index.html`;
+  const directoryIndex = appDirectoryIndex(resolved.relativePath);
   const indexed = cached
     ? null
     : await cache.match(appRequestUrl(resolved.appId, directoryIndex), { ignoreSearch: true });
+  if (!cached && indexed && directoryIndex !== resolved.relativePath) {
+    const redirectUrl = appRequestUrl(resolved.appId, directoryIndex) + new URL(request.url).search;
+    console.info(`[CAS] app route: ${new URL(request.url).pathname} -> ${redirectUrl}`);
+    return Response.redirect(redirectUrl, 302);
+  }
   const response = cached || indexed;
   if (!response) {
     return new Response("App asset not found.", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+
+  function appDirectoryIndex(relativePath) {
+    const path = String(relativePath).replace(/^\/+/, "");
+    if (path.endsWith("/")) return `${path}index.html`;
+    if (!/\.[^/]+$/.test(path)) return `${path}/index.html`;
+    return path;
   }
   return stampCoiHeaders(response);
 }
