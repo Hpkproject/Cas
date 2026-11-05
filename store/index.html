@@ -10,9 +10,12 @@
 </head>
 <body>
   <main>
-    <header><a href="../">CAS</a><h1>Store</h1><p>Offline-ready apps for Cora App Services.</p></header>
+    <header><img class="store-logo" src="./store-icon.svg" alt=""><h1>CAS Store</h1><p>Install offline-ready apps for Cora App Services.</p></header>
     <section id="apps" aria-live="polite">Loading catalog…</section>
   </main>
   <script type="module" src="./store.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js", { scope: "./" });
+  </script>
 </body>
 </html>

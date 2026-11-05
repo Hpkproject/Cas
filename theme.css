@@ -269,7 +269,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .cas-sidebar__btn svg {
@@ -284,14 +284,16 @@ html, body {
 
 .cas-sidebar__btn:hover,
 .cas-sidebar__btn:focus-visible {
-  background: rgba(185, 163, 255, 0.12);
+  background: linear-gradient(135deg, rgba(185, 163, 255, 0.2), rgba(124, 77, 255, 0.16));
   color: var(--color-text);
+  transform: translateY(-2px);
   outline: none;
 }
 
 .cas-sidebar__btn[aria-current="true"] {
-  background: rgba(185, 163, 255, 0.18);
+  background: linear-gradient(135deg, rgba(185, 163, 255, 0.28), rgba(124, 77, 255, 0.22));
   color: var(--color-primary);
+  box-shadow: 0 8px 22px rgba(124, 77, 255, 0.18);
 }
 
 .cas-sidebar__spacer {
@@ -308,7 +310,7 @@ html, body {
 .cas-settings-window {
   min-height: 100vh;
   display: flex;
-  background: var(--color-surface);
+  background: radial-gradient(circle at 85% 0%, rgba(124, 77, 255, .16), transparent 34%), var(--color-surface);
 }
 
 .cas-settings-window__sidebar {
@@ -319,11 +321,16 @@ html, body {
   gap: 8px;
   padding: 24px 14px;
   border-right: 1px solid var(--color-outline);
-  background: rgba(10, 9, 18, 0.8);
+  background: rgba(10, 9, 18, 0.72);
+  backdrop-filter: blur(18px);
 }
 
 .cas-settings-window__brand {
-  padding: 8px 14px 28px;
+  margin: 0 4px 20px;
+  padding: 14px;
+  border: 1px solid rgba(185, 163, 255, .2);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(185, 163, 255, .18), rgba(124, 77, 255, .08));
   color: var(--color-primary);
   font-weight: 800;
   letter-spacing: .2em;
@@ -339,12 +346,14 @@ html, body {
   text-align: left;
   font: var(--type-label);
   cursor: pointer;
+  transition: background-color 160ms ease, transform 160ms ease;
 }
 
 .cas-settings-nav:hover,
 .cas-settings-nav.is-active {
   color: var(--color-text);
   background: rgba(185, 163, 255, .14);
+  transform: translateX(3px);
 }
 
 .cas-settings-window__close {
@@ -356,7 +365,7 @@ html, body {
   flex: 1;
   min-width: 0;
   overflow: auto;
-  padding: 32px;
+  padding: 42px;
 }
 
 /* -------------------------------------------------------------------- */

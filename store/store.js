@@ -1,5 +1,25 @@
 const catalogUrl = new URL("./apps.json", import.meta.url);
 const container = document.querySelector("#apps");
+const manager = document.createElement("iframe");
+manager.hidden = true;
+manager.src = new URL("../?mode=appmgr", import.meta.url);
+document.body.append(manager);
+let managerReady = false;
+let managerQueue = [];
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== location.origin) return;
+  if (event.data?.type === "cas:appmgr-ready") {
+    managerReady = true;
+    managerQueue.splice(0).forEach((message) => manager.contentWindow.postMessage(message, location.origin));
+  }
+});
+
+function installFromCas(app) {
+  const message = { type: "cas:appmgr-install", url: app.hpk, filename: `${app.id || "app"}.hpk` };
+  if (managerReady) manager.contentWindow.postMessage(message, location.origin);
+  else managerQueue.push(message);
+}
 
 async function loadCatalog() {
   const response = await fetch(catalogUrl, { cache: "no-store" });
@@ -12,14 +32,22 @@ async function loadCatalog() {
   }
   container.innerHTML = apps.map((app) => `
     <article class="store-card">
-      <img src="${safe(app.icon)}" alt="">
+      <img src="${safe(app.icon)}" alt="" onerror="this.src='./store-icon.svg'">
       <h2>${safe(app.name)}</h2>
       <p>${safe(app.description ?? "")}</p>
       <small>Version ${safe(app.version ?? "latest")}</small><br>
-      <a href="${safe(app.hpk)}" download>Download HPK</a>
-      ${app.updateUrl ? `<button data-update="${safe(app.updateUrl)}">Check update</button>` : ""}
+      <button class="store-install" data-app="${safe(app.id)}">Install</button>
+      ${app.updateUrl ? `<button data-update="${safe(app.updateUrl)}">Check for updates</button>` : ""}
     </article>
   `).join("");
+  const byId = new Map(apps.map((app) => [app.id, app]));
+  container.querySelectorAll(".store-install").forEach((button) => {
+    button.addEventListener("click", () => {
+      button.disabled = true;
+      button.textContent = "Opening CAS…";
+      installFromCas(byId.get(button.dataset.app));
+    });
+  });
   container.querySelectorAll("[data-update]").forEach((button) => {
     button.addEventListener("click", async () => {
       button.disabled = true;
@@ -29,7 +57,7 @@ async function loadCatalog() {
         button.textContent = update.version && update.hpk ? `Download ${update.version}` : "No update";
         if (update.hpk) {
           button.disabled = false;
-          button.onclick = () => { window.location.href = update.hpk; };
+          button.onclick = () => installFromCas({ id: "update", hpk: update.hpk });
         } else {
           button.disabled = true;
         }

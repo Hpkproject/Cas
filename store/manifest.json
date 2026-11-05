@@ -4,13 +4,14 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#141218",
   "theme_color": "#141218",
   "icons": [
     {
-      "src": "../icons/CAS-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "./store-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ]
 }
