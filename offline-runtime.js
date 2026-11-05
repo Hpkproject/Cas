@@ -14,7 +14,7 @@ import { attachBridge } from "./cas-perms-bridge.js";
 import { openZip } from "./zip-reader.js";
 
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v7";
+const APP_CACHE_VERSION = "v8";
 const APP_INDEX_PATH = "index.html";
 const CACHE_WRITE_CONCURRENCY = 6;
 
@@ -320,8 +320,10 @@ function buildAppNavigationScript(appId) {
   return `<script>
 (function () {
   var appBase = ${baseJson};
+  var appPath = new URL(appBase, location.href).pathname;
+  var casPath = appPath.slice(0, appPath.indexOf("/apps/"));
   function openAppRoute(url, target, features) {
-    var destination = new URL(url, appBase);
+    var destination = normalizeAppRoute(url);
     var child = originalOpen.call(window, "", target || "_blank", features || "popup");
     if (!child) return child;
     child.document.open();
@@ -345,13 +347,20 @@ function buildAppNavigationScript(appId) {
     return child;
   }
   var originalOpen = window.open;
-  function appRouteUrl(href) {
+  function normalizeAppRoute(href) {
     var destination = new URL(href, appBase);
     if (destination.origin === location.origin &&
-        destination.pathname.indexOf(appBase) === 0 &&
-        !destination.pathname.endsWith("/") &&
-        !/\.[^/]+$/.test(destination.pathname)) {
-      destination.pathname = destination.pathname.replace(/\/?$/, "/index.html");
+        destination.pathname.indexOf(appPath) !== 0 &&
+        destination.pathname.indexOf(casPath) === 0) {
+      destination.pathname = appPath + destination.pathname.slice(casPath.length);
+    }
+    if (destination.origin === location.origin &&
+        destination.pathname.indexOf(appPath) === 0) {
+      if (destination.pathname.endsWith("/")) {
+        destination.pathname += "index.html";
+      } else if (!/\.[^/]+$/.test(destination.pathname)) {
+        destination.pathname += "/index.html";
+      }
     }
     return destination.href;
   }
@@ -361,8 +370,8 @@ function buildAppNavigationScript(appId) {
       if (!href || /^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(href)) return;
       try {
         var target = new URL(href, appBase);
-        if (target.origin === location.origin && target.pathname.indexOf(appBase) === 0) {
-          link.setAttribute("href", appRouteUrl(href));
+        if (target.origin === location.origin && target.pathname.indexOf(appPath) === 0) {
+          link.setAttribute("href", normalizeAppRoute(href));
         }
       } catch (_) {}
     });
@@ -375,7 +384,7 @@ function buildAppNavigationScript(appId) {
   }
   window.open = function (url, target, features) {
     if (typeof url === "string" && !/^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#|javascript:)/i.test(url)) {
-      try { return openAppRoute(url, target, features); } catch (_) {}
+      try { return openAppRoute(normalizeAppRoute(url), target, features); } catch (_) {}
     }
     return originalOpen.call(window, url, target, features);
   };
@@ -387,7 +396,7 @@ function buildAppNavigationScript(appId) {
     if (link.target === "_blank" || link.target === "_new") {
       event.preventDefault();
       event.stopImmediatePropagation();
-      var destination = appRouteUrl(href);
+      var destination = normalizeAppRoute(href);
       link.setAttribute("href", destination);
       openAppRoute(destination, "_blank", "popup");
     } else if (href.charAt(0) === "/" && href.indexOf(appBase) !== 0 &&

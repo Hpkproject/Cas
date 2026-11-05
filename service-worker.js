@@ -10,7 +10,7 @@
 
 const SHELL_CACHE_NAME = "cas-shell-v3";
 const APP_CACHE_PREFIX = "cas-app-";
-const APP_CACHE_VERSION = "v7";
+const APP_CACHE_VERSION = "v8";
 const BASE_PATH = new URL("./", self.location.href).pathname.replace(/\/$/, "");
 const SHELL_URL = `${BASE_PATH}/index.html`;
 const APP_URL_PREFIX = `${BASE_PATH}/apps`;
