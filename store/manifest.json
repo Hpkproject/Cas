@@ -1,0 +1,16 @@
+{
+  "name": "CAS Store",
+  "short_name": "Store",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#141218",
+  "theme_color": "#141218",
+  "icons": [
+    {
+      "src": "../icons/CAS-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

@@ -686,6 +686,37 @@ body.cas-dropping .cas-main {
   gap: 8px;
 }
 
+.cas-settings-app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.cas-settings-app-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--cas-border, #302b39);
+  border-radius: 16px;
+  background: var(--cas-surface, #201c26);
+  cursor: grab;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.cas-settings-app-card:active,
+.cas-settings-app-card.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.05) rotate(1deg);
+  box-shadow: 0 16px 32px rgb(0 0 0 / 35%);
+}
+
+.cas-permission-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
 #cas-update-results {
   margin-top: 12px;
 }

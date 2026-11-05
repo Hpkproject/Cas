@@ -1,0 +1,10 @@
+:root { color-scheme: dark; font: 16px system-ui, sans-serif; background: #141218; color: #f4efff; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #302342, #141218 55%); }
+main { max-width: 1050px; margin: auto; padding: 32px 20px; }
+header { margin-bottom: 28px; } header a { color: #cbb6ff; } h1 { font-size: 42px; margin: 18px 0 4px; }
+#apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.store-card { padding: 20px; border: 1px solid #443751; border-radius: 18px; background: #201b29; }
+.store-card img { width: 72px; height: 72px; border-radius: 16px; object-fit: cover; background: #30283b; }
+.store-card h2 { margin: 12px 0 6px; } .store-card p { color: #bdb3ca; min-height: 42px; }
+.store-card button, .store-card a { display: inline-block; border: 0; border-radius: 999px; padding: 10px 16px; margin: 5px 5px 0 0; color: #16121c; background: #d7c1ff; text-decoration: none; cursor: pointer; font: inherit; }
+.store-card small { color: #a99db5; }

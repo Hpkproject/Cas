@@ -13,6 +13,7 @@ import {
 import { checkAllForUpdates, applyUpdate } from "./update-checker.js";
 import { syncAppWorkerState } from "./bw-manager.js";
 import { uninstallApp, uninstallPlugin } from "./uninstall.js";
+import { fs } from "./fs-manager.js";
 
 export async function openSettingsApp() {
   const popup = window.open("", "cas-settings-app", "popup,width=980,height=720,resizable=yes");
@@ -33,9 +34,9 @@ export async function openSettingsApp() {
   <div class="cas-settings-window">
     <aside class="cas-settings-window__sidebar">
       <div class="cas-settings-window__brand">CAS</div>
-      <button class="cas-settings-nav is-active" data-section="permissions">Permissions</button>
+      <button class="cas-settings-nav is-active" data-section="apps">Apps</button>
+      <button class="cas-settings-nav" data-section="permissions">Permissions</button>
       <button class="cas-settings-nav" data-section="updates">Updates</button>
-      <button class="cas-settings-nav" data-section="about">About</button>
       <button class="cas-settings-window__close" type="button">Close</button>
     </aside>
     <main class="cas-settings-window__main" id="cas-settings-root"></main>
@@ -48,9 +49,10 @@ export async function openSettingsApp() {
   const navButtons = [...popup.document.querySelectorAll(".cas-settings-nav")];
   const renderSection = async (section) => {
     navButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.section === section));
-    if (section === "permissions") {
-      renderPermissionsSection(root);
-      await renderPermissionTable(root);
+    if (section === "apps") {
+      await renderAppsSection(root);
+    } else if (section === "permissions") {
+      await renderPermissionsSection(root);
     } else if (section === "updates") {
       renderUpdatesSection(root);
     } else {
@@ -60,18 +62,87 @@ export async function openSettingsApp() {
 
   navButtons.forEach((button) => button.addEventListener("click", () => renderSection(button.dataset.section)));
   popup.document.querySelector(".cas-settings-window__close").addEventListener("click", () => popup.close());
-  await renderSection("permissions");
+  await renderSection("apps");
 }
 
-function renderPermissionsSection(root) {
+async function renderAppsSection(root) {
+  const raw = await fs.readText(["CAS", "apps", "index.json"]);
+  const apps = raw ? JSON.parse(raw).filter((entry) => entry.type !== "plugin") : [];
+  root.innerHTML = `
+    <div class="cas-settings">
+      <section class="cas-settings__section">
+        <h1 class="cas-settings__title">Apps</h1>
+        <p class="cas-gate__note">Hold an app to rearrange it. Drag apps to change their launcher order.</p>
+        <div class="cas-settings-app-grid" id="cas-settings-app-grid"></div>
+      </section>
+    </div>`;
+  const grid = root.querySelector("#cas-settings-app-grid");
+  if (!apps.length) {
+    grid.innerHTML = `<p class="cas-gate__note">No apps installed yet.</p>`;
+    return;
+  }
+  apps.forEach((app) => {
+    const card = root.ownerDocument.createElement("article");
+    card.className = "cas-settings-app-card";
+    card.draggable = true;
+    card.dataset.appKey = app.appId ?? app.name;
+    card.innerHTML = `<strong>${escapeHtml(app.name)}</strong><small>${escapeHtml(app.type)}</small><button class="cas-btn cas-btn--danger">Uninstall</button>`;
+    card.querySelector("button").addEventListener("click", async () => {
+      if (!confirm(`Uninstall ${app.name}?`)) return;
+      if (app.type === "offline") await uninstallApp(app.appId ?? app.name);
+      renderAppsSection(root);
+    });
+    grid.append(card);
+  });
+  let dragged = null;
+  grid.addEventListener("dragstart", (event) => {
+    dragged = event.target.closest(".cas-settings-app-card");
+    dragged?.classList.add("is-dragging");
+  });
+  grid.addEventListener("dragend", async () => {
+    dragged?.classList.remove("is-dragging");
+    dragged = null;
+    await saveAppOrder([...grid.children].map((card) => card.dataset.appKey));
+  });
+  grid.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    const target = event.target.closest(".cas-settings-app-card");
+    if (dragged && target && target !== dragged) {
+      const rect = target.getBoundingClientRect();
+      grid.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+    }
+  });
+}
+
+async function saveAppOrder(order) {
+  const raw = await fs.readText(["CAS", "apps", "index.json"]);
+  const apps = raw ? JSON.parse(raw) : [];
+  const rank = new Map(order.map((key, index) => [key, index]));
+  apps.sort((a, b) => (rank.get(a.appId ?? a.name) ?? 99999) - (rank.get(b.appId ?? b.name) ?? 99999));
+  await fs.writeFile(["CAS", "apps", "index.json"], JSON.stringify(apps, null, 2));
+}
+
+async function renderPermissionsSection(root) {
+  const subjects = await listPermissionSubjects();
   root.innerHTML = `
     <div class="cas-settings">
       <section class="cas-settings__section">
         <h1 class="cas-settings__title">Permissions</h1>
-        <p class="cas-gate__note">Manage access and uninstall installed apps and plugins.</p>
-        <div class="cas-perm-table" id="cas-perm-table"></div>
+        <div class="cas-permission-picker">${Object.values(PERMISSIONS).map((perm) => `<button class="cas-btn cas-permission-tab" data-perm="${perm}">${escapeHtml(PERMISSION_COPY[perm].label)}</button>`).join("")}</div>
+        <div id="cas-permission-apps"></div>
       </section>
     </div>`;
+  const renderPermission = (perm) => {
+    root.querySelector("#cas-permission-apps").innerHTML = subjects.map((subject) => `
+      <label class="cas-perm-row"><input type="checkbox" ${subject.permissions.has(perm) ? "checked" : ""} data-subject="${escapeHtml(subject.appId)}"><span>${escapeHtml(subject.name)}<small>${escapeHtml(PERMISSION_COPY[perm].desc)}</small></span></label>
+    `).join("");
+    root.querySelectorAll("#cas-permission-apps input").forEach((input) => input.addEventListener("change", async () => {
+      if (input.checked) await grantPermission(input.dataset.subject, perm);
+      else await revokePermission(input.dataset.subject, perm);
+    }));
+  };
+  root.querySelectorAll(".cas-permission-tab").forEach((button) => button.addEventListener("click", () => renderPermission(button.dataset.perm)));
+  renderPermission(Object.values(PERMISSIONS)[0]);
 }
 
 function renderUpdatesSection(root) {
